@@ -121,77 +121,214 @@ const Results = () => {
   if (!user) return <Navigate to="/auth" replace />;
 
   return (
-    <main className="min-h-screen container py-10">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-3xl font-bold">Your Results</h1>
-          <p className="text-muted-foreground">Insightful analysis across all layers</p>
+    <main className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="container py-12 max-w-7xl">
+        <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6 animate-fade-in">
+          <div className="text-center md:text-left">
+            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
+              ✨ Assessment Complete
+            </div>
+            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent mb-4">
+              Your Career Insights
+            </h1>
+            <p className="text-xl text-muted-foreground max-w-2xl">
+              Comprehensive analysis of your strengths, preferences, and career potential
+            </p>
+          </div>
+          <Button 
+            onClick={exportPDF} 
+            disabled={generating}
+            size="lg"
+            className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 hover-scale"
+          >
+            {generating ? (
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+            ) : (
+              <Download className="h-5 w-5 mr-2" />
+            )}
+            Download Report
+          </Button>
         </div>
-        <Button onClick={exportPDF} disabled={generating}>
-          {generating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />} Download PDF
-        </Button>
-      </div>
 
-      <div ref={pdfRef} className="space-y-6">
-        <Card>
-          <CardHeader><CardTitle>Intelligence & Aptitude Overview</CardTitle></CardHeader>
-          <CardContent style={{ height: 320 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={catAverages}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-20} textAnchor="end" height={70} />
-                <YAxis domain={[1, 5]} />
-                <Tooltip />
-                <Bar dataKey="score" fill="hsl(var(--primary))" />
-              </BarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+        <div ref={pdfRef} className="space-y-8">
+          <div className="grid lg:grid-cols-2 gap-8">
+            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '100ms' }}>
+              <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
+                <CardTitle className="text-2xl flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
+                  Intelligence & Aptitude Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8" style={{ height: 480 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={catAverages} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                    <XAxis 
+                      dataKey="name" 
+                      angle={-20} 
+                      textAnchor="end" 
+                      height={80} 
+                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <YAxis 
+                      domain={[1, 5]} 
+                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <Tooltip 
+                      contentStyle={{ 
+                        backgroundColor: 'hsl(var(--card))', 
+                        border: '1px solid hsl(var(--border))',
+                        borderRadius: '8px',
+                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                      }}
+                    />
+                    <Bar 
+                      dataKey="score" 
+                      fill="url(#barGradient)" 
+                      radius={[4, 4, 0, 0]}
+                    />
+                    <defs>
+                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="hsl(var(--primary))" />
+                        <stop offset="100%" stopColor="hsl(var(--accent))" />
+                      </linearGradient>
+                    </defs>
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-        <Card>
-          <CardHeader><CardTitle>Strengths Radar</CardTitle></CardHeader>
-          <CardContent style={{ height: 360 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={catAverages}>
-                <PolarGrid />
-                <PolarAngleAxis dataKey="name" />
-                <PolarRadiusAxis domain={[1, 5]} />
-                <Radar name="Score" dataKey="score" stroke="hsl(var(--accent-foreground))" fill="hsl(var(--accent))" fillOpacity={0.5} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '200ms' }}>
+              <CardHeader className="bg-gradient-to-r from-accent/10 to-primary/10 border-b">
+                <CardTitle className="text-2xl flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-accent to-primary" />
+                  Strengths Radar
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8" style={{ height: 480 }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={catAverages} margin={{ top: 20, right: 80, bottom: 20, left: 80 }}>
+                    <PolarGrid stroke="hsl(var(--border))" />
+                    <PolarAngleAxis 
+                      dataKey="name" 
+                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                    />
+                    <PolarRadiusAxis 
+                      domain={[1, 5]} 
+                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <Radar 
+                      name="Score" 
+                      dataKey="score" 
+                      stroke="hsl(var(--primary))" 
+                      fill="hsl(var(--primary))" 
+                      fillOpacity={0.3}
+                      strokeWidth={3}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
+          </div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card className="md:col-span-2">
-            <CardHeader><CardTitle>Recommendations & Insights</CardTitle></CardHeader>
-            <CardContent>
-              <ul className="list-disc pl-6 space-y-2 text-sm text-muted-foreground">
-                <li>Focus on top-scoring categories for near-term skill development.</li>
-                <li>Align projects and internships with 1-2 highest strengths.</li>
-                <li>Use the action plan to validate choices via micro-experiments.</li>
-              </ul>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader><CardTitle>Career Counselor Chatbot</CardTitle></CardHeader>
-            <CardContent>
-              <div className="h-56 overflow-y-auto border rounded-md p-3 mb-3 space-y-2 bg-background/50">
-                {chat.length === 0 && (
-                  <div className="text-sm text-muted-foreground">Ask me anything about your results, careers, or next steps.</div>
-                )}
-                {chat.map((m, i) => (
-                  <div key={i} className={m.from === "ai" ? "text-sm" : "text-sm text-foreground"}>
-                    <span className="font-semibold">{m.from === "ai" ? "Counselor" : "You"}:</span> {m.text}
+          <div className="grid xl:grid-cols-3 gap-8">
+            <Card className="xl:col-span-2 animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '300ms' }}>
+              <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
+                <CardTitle className="text-2xl flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
+                  Recommendations & Insights
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-lg text-primary">Top Strengths</h3>
+                    <div className="space-y-3">
+                      {catAverages.sort((a, b) => b.score - a.score).slice(0, 3).map((cat, idx) => (
+                        <div key={cat.name} className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-primary-foreground text-sm font-bold">
+                            {idx + 1}
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium">{cat.name}</p>
+                            <p className="text-sm text-muted-foreground">Score: {cat.score}/5</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
-              <div className="flex gap-2">
-                <Input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder="Type your question..." />
-                <Button onClick={sendChat}><Send className="h-4 w-4" /></Button>
-              </div>
-            </CardContent>
-          </Card>
+                  <div className="space-y-4">
+                    <h3 className="font-semibold text-lg text-accent">Action Items</h3>
+                    <ul className="space-y-3">
+                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
+                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
+                        <span className="text-sm">Focus on top-scoring categories for skill development</span>
+                      </li>
+                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
+                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
+                        <span className="text-sm">Align projects with your highest strengths</span>
+                      </li>
+                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
+                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
+                        <span className="text-sm">Validate career choices through micro-experiments</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '400ms' }}>
+              <CardHeader className="bg-gradient-to-r from-accent/10 to-primary/10 border-b">
+                <CardTitle className="text-xl flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-accent to-primary" />
+                  AI Career Counselor
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="h-80 overflow-y-auto border rounded-lg p-4 mb-4 space-y-3 bg-background/50 backdrop-blur-sm">
+                  {chat.length === 0 && (
+                    <div className="text-center py-8">
+                      <div className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center mx-auto mb-3">
+                        <span className="text-2xl">🤖</span>
+                      </div>
+                      <p className="text-sm text-muted-foreground">Ask me anything about your results, career paths, or next steps!</p>
+                    </div>
+                  )}
+                  {chat.map((m, i) => (
+                    <div key={i} className={`flex gap-3 ${m.from === "ai" ? "justify-start" : "justify-end"}`}>
+                      <div className={`max-w-[80%] p-3 rounded-lg ${
+                        m.from === "ai" 
+                          ? "bg-primary/10 text-primary border border-primary/20" 
+                          : "bg-accent/10 text-accent border border-accent/20"
+                      }`}>
+                        <div className="text-xs font-semibold mb-1 opacity-60">
+                          {m.from === "ai" ? "AI Counselor" : "You"}
+                        </div>
+                        <div className="text-sm">{m.text}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <Input 
+                    value={chatInput} 
+                    onChange={(e) => setChatInput(e.target.value)} 
+                    placeholder="Ask about your career path..."
+                    className="flex-1"
+                    onKeyPress={(e) => e.key === 'Enter' && sendChat()}
+                  />
+                  <Button 
+                    onClick={sendChat}
+                    className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
+                  >
+                    <Send className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </main>
