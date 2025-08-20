@@ -32,6 +32,26 @@ const Results = () => {
   const [generating, setGenerating] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
 
+  // SEO: title, description, canonical
+  useEffect(() => {
+    document.title = "Career Compass Results - Insights & PDF";
+    const metaDesc = "View your Career Compass results, insights, and download your PDF report.";
+    let descTag = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!descTag) {
+      descTag = document.createElement('meta');
+      descTag.name = 'description';
+      document.head.appendChild(descTag);
+    }
+    descTag.content = metaDesc;
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = window.location.origin + '/results';
+  }, []);
+
   useEffect(() => {
     if (!assessId) return;
     (async () => {

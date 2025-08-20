@@ -44,6 +44,27 @@ const Assessment = () => {
   const [suggestions, setSuggestions] = useState<Record<string, string>>({});
   const [responses, setResponses] = useState<Record<string, any>>({});
 
+  // SEO: title, description, canonical
+  useEffect(() => {
+    const title = `Career Compass Assessment - Layer ${layer}`;
+    document.title = title;
+    const metaDesc = `Complete layer ${layer} of the Career Compass assessment to discover strengths.`;
+    let descTag = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
+    if (!descTag) {
+      descTag = document.createElement('meta');
+      descTag.name = 'description';
+      document.head.appendChild(descTag);
+    }
+    descTag.content = metaDesc;
+    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
+    if (!canonical) {
+      canonical = document.createElement('link');
+      canonical.rel = 'canonical';
+      document.head.appendChild(canonical);
+    }
+    canonical.href = window.location.origin + '/assessment';
+  }, [layer]);
+
   useEffect(() => {
     if (!user) return;
     (async () => {
