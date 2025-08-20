@@ -1,1 +1,4 @@
 project_id = "jytncxnylnkpdvwquxzv"
+
+[functions.hf-assist]
+verify_jwt = false
