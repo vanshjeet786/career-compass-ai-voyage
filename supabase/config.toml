@@ -1,4 +1,4 @@
 project_id = "jytncxnylnkpdvwquxzv"
 
-[functions.hf-assist]
+[functions.gemini-assist]
 verify_jwt = false

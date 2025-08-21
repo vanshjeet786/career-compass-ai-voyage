@@ -107,8 +107,21 @@ const Results = () => {
     setChat((c) => [...c, userMsg]);
     setChatInput("");
     try {
-      const { data, error } = await supabase.functions.invoke("hf-assist", {
-        body: { mode: "chat", prompt: userMsg.text, context: { assessId, catAverages } },
+      // Get user's assessment responses for context
+      const { data: responsesData } = await supabase
+        .from("assessment_responses")
+        .select("question_id, response_value, layer_number")
+        .eq("assessment_id", assessId);
+      
+      // Create a summary of the user's responses for better context
+      const context = {
+        assessId,
+        catAverages,
+        responses: responsesData || []
+      };
+      
+      const { data, error } = await supabase.functions.invoke("gemini-assist", {
+        body: { mode: "chat", prompt: userMsg.text, context },
       });
       if (error) throw error;
       setChat((c) => [...c, { from: "ai", text: data.text }]);

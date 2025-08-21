@@ -28,21 +28,46 @@ const Auth = () => {
     try {
       const redirectUrl = `${window.location.origin}/`;
       if (mode === "signup") {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { emailRedirectTo: redirectUrl },
         });
         if (error) throw error;
-        toast({ title: "Check your email", description: "Confirm your email to finish signup." });
+        if (data.user && !data.user.identities?.length) {
+          // User already exists
+          toast({ 
+            title: "Account exists", 
+            description: "This account already exists. Please log in instead.",
+            variant: "destructive"
+          });
+        } else {
+          toast({ 
+            title: "Check your email", 
+            description: "Confirm your email to finish signup, then log in." 
+          });
+          setMode("login");
+        }
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ 
+          email, 
+          password,
+          options: {
+            // This will allow sign in even if email is not confirmed (if enabled in Supabase settings)
+            skipEmailConfirmCheck: true
+          }
+        });
         if (error) throw error;
         toast({ title: "Welcome back", description: "You are now signed in." });
         navigate("/assess");
       }
     } catch (e: any) {
-      toast({ title: "Auth error", description: e.message, variant: "destructive" });
+      console.error("Auth error:", e);
+      toast({ 
+        title: "Auth error", 
+        description: e.message || "Invalid credentials. Please check your email and password.",
+        variant: "destructive" 
+      });
     } finally {
       setLoading(false);
     }

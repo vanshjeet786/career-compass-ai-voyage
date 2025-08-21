@@ -34,6 +34,24 @@ const getLayerData = (layer: LayerKey): Record<string, string[]> => {
   }
 };
 
+// Function to check if a question is open-ended (Layer 6)
+const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
+  if (layer !== 6) return false;
+  
+  // For layer 6, check if the question is open-ended
+  // Open-ended questions typically don't have predefined answer options
+  // We can identify them by checking if they end with "(open-ended)" or similar patterns
+  return question.includes("(open-ended)") || 
+         question.includes("How would you") ||
+         question.includes("What kind") ||
+         question.includes("What are 3") ||
+         question.includes("Who can help") ||
+         question.includes("What specific skills") ||
+         question.includes("What timeline") ||
+         question.includes("What fears or doubts") ||
+         question.includes("What kind of support");
+};
+
 const Assessment = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
@@ -113,7 +131,7 @@ const Assessment = () => {
   ) => {
     try {
       setAiLoading(question + mode);
-      const { data, error } = await supabase.functions.invoke("hf-assist", {
+      const { data, error } = await supabase.functions.invoke("gemini-assist", {
         body: { mode, question, context: { layer, responses } },
       });
       if (error) throw error;
@@ -205,20 +223,23 @@ const Assessment = () => {
                           )}
                           Explain
                         </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => callAI("suggest", q)} 
-                          disabled={aiLoading === q + "suggest"}
-                          className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200"
-                        >
-                          {aiLoading === q + "suggest" ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <Lightbulb className="h-4 w-4 mr-1" />
-                          )}
-                          Suggest
-                        </Button>
+                        {/* Show Suggest button only for open-ended questions in Layer 6 */}
+                        {isOpenEndedQuestion(layer, q) && (
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => callAI("suggest", q)} 
+                            disabled={aiLoading === q + "suggest"}
+                            className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200"
+                          >
+                            {aiLoading === q + "suggest" ? (
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                            ) : (
+                              <Lightbulb className="h-4 w-4 mr-1" />
+                            )}
+                            Suggest
+                          </Button>
+                        )}
                       </div>
                     </div>
 
