@@ -23,14 +23,14 @@ const likertOptions = Object.keys(RESPONSE_SCALE);
 
 type LayerKey = 1 | 2 | 3 | 4 | 5 | 6;
 
-const getLayerData = (layer: LayerKey): Record<string, string[]> => {
+const getLayerData = (layer: LayerKey) => {
   switch (layer) {
     case 1: return LAYER_1_QUESTIONS;
     case 2: return LAYER_2_QUESTIONS;
     case 3: return LAYER_3_QUESTIONS;
     case 4: return LAYER_4_QUESTIONS;
     case 5: return LAYER_5_QUESTIONS;
-    case 6: return LAYER_6_QUESTIONS as Record<string, string[]>;
+    case 6: return LAYER_6_QUESTIONS;
   }
 };
 
@@ -172,113 +172,151 @@ const Assessment = () => {
         </header>
 
         <div className="space-y-8">
-          {Object.entries(layerData).map(([category, questions], catIdx) => (
-            <Card key={category} className="animate-fade-in hover-scale border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm" style={{ animationDelay: `${catIdx * 100}ms` }}>
-              <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
-                <CardTitle className="text-xl flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent" />
-                  {category}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6 p-6">
-                {questions.map((q, idx) => (
-                  <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
-                    <div className="flex items-start justify-between gap-4 mb-4">
-                      <p className="font-medium flex-1 text-foreground group-hover:text-primary transition-colors">
-                        <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-semibold mr-3">
-                          {idx + 1}
-                        </span>
-                        {q}
-                      </p>
-                      <div className="flex gap-2">
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => callAI("explain", q)} 
-                          disabled={aiLoading === q + "explain"}
-                          className="hover:bg-primary/10 hover:border-primary/20 transition-all duration-200"
-                        >
-                          {aiLoading === q + "explain" ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+          {Object.entries(layerData).map(([category, questions], catIdx) => {
+            const isCareerClustering = category === "Career_Clustering" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
+            const actualQuestions = isCareerClustering ? (questions as any).questions : questions as string[];
+            
+            return (
+              <Card key={category} className="animate-fade-in hover-scale border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm" style={{ animationDelay: `${catIdx * 100}ms` }}>
+                <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
+                  <CardTitle className="text-xl flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent" />
+                    {category.replace(/_/g, ' ')}
+                  </CardTitle>
+                  {isCareerClustering && (
+                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                      {(questions as any).instructions}
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-6 p-6">
+                  {actualQuestions.map((q, idx) => {
+                    const isOtherOption = q.startsWith("Other (");
+                    return (
+                      <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
+                        <div className="flex items-start justify-between gap-4 mb-4">
+                          <p className="font-medium flex-1 text-foreground group-hover:text-primary transition-colors">
+                            <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-semibold mr-3">
+                              {idx + 1}
+                            </span>
+                            {q}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => callAI("explain", q)} 
+                              disabled={aiLoading === q + "explain"}
+                              className="hover:bg-primary/10 hover:border-primary/20 transition-all duration-200"
+                            >
+                              {aiLoading === q + "explain" ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <HelpCircle className="h-4 w-4 mr-1" />
+                              )}
+                              Explain
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => callAI("suggest", q)} 
+                              disabled={aiLoading === q + "suggest"}
+                              className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200"
+                            >
+                              {aiLoading === q + "suggest" ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <Lightbulb className="h-4 w-4 mr-1" />
+                              )}
+                              Suggest
+                            </Button>
+                          </div>
+                        </div>
+
+                        {layer <= 5 || !isCareerClustering ? (
+                          layer <= 5 ? (
+                            <div className="space-y-3">
+                              <RadioGroup
+                                value={responses[q]?.label || ""}
+                                onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
+                                className="grid grid-cols-1 md:grid-cols-5 gap-3"
+                              >
+                                {likertOptions.map((opt) => (
+                                  <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
+                                    <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
+                                    <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
+                                  </div>
+                                ))}
+                              </RadioGroup>
+                            </div>
                           ) : (
-                            <HelpCircle className="h-4 w-4 mr-1" />
-                          )}
-                          Explain
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          onClick={() => callAI("suggest", q)} 
-                          disabled={aiLoading === q + "suggest"}
-                          className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200"
-                        >
-                          {aiLoading === q + "suggest" ? (
-                            <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                          ) : (
-                            <Lightbulb className="h-4 w-4 mr-1" />
-                          )}
-                          Suggest
-                        </Button>
-                      </div>
+                            <div className="space-y-3">
+                              <Textarea
+                                placeholder="Share your thoughts, experiences, and insights..."
+                                value={responses[q]?.text || ""}
+                                onChange={(e) => saveResponse(q, { text: e.target.value })}
+                                className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                              />
+                            </div>
+                          )
+                        ) : (
+                          <div className="space-y-4">
+                            <RadioGroup
+                              value={responses[q]?.label || ""}
+                              onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
+                              className="grid grid-cols-1 md:grid-cols-5 gap-3"
+                            >
+                              {likertOptions.map((opt) => (
+                                <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
+                                  <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
+                                  <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
+                                </div>
+                              ))}
+                            </RadioGroup>
+                            {isOtherOption && (
+                              <Textarea
+                                placeholder="Please specify your own career cluster..."
+                                value={responses[q]?.customText || ""}
+                                onChange={(e) => saveResponse(q, { ...responses[q], customText: e.target.value })}
+                                className="min-h-[80px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                              />
+                            )}
+                          </div>
+                        )}
+
+                        {(explanations[q] || suggestions[q]) && (
+                          <div className="mt-4 space-y-3 animate-fade-in">
+                            {explanations[q] && (
+                              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                                <p className="text-sm">
+                                  <span className="font-semibold text-primary flex items-center gap-2 mb-2">
+                                    <HelpCircle className="h-4 w-4" />
+                                    Why it matters:
+                                  </span>
+                                  <span className="text-muted-foreground">{explanations[q]}</span>
+                                </p>
+                              </div>
+                            )}
+                            {suggestions[q] && (
+                              <div className="p-4 rounded-lg bg-accent/5 border border-accent/20">
+                                <div className="text-sm">
+                                  <span className="font-semibold text-accent flex items-center gap-2 mb-2">
+                                    <Lightbulb className="h-4 w-4" />
+                                    Suggestions:
+                                  </span>
+                                  <div className="whitespace-pre-wrap text-muted-foreground">{suggestions[q]}</div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                     </div>
-
-                    {layer <= 5 ? (
-                      <div className="space-y-3">
-                        <RadioGroup
-                          value={responses[q]?.label || ""}
-                          onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
-                          className="grid grid-cols-1 md:grid-cols-5 gap-3"
-                        >
-                          {likertOptions.map((opt) => (
-                            <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
-                              <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
-                              <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
-                            </div>
-                          ))}
-                        </RadioGroup>
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        <Textarea
-                          placeholder="Share your thoughts, experiences, and insights..."
-                          value={responses[q]?.text || ""}
-                          onChange={(e) => saveResponse(q, { text: e.target.value })}
-                          className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
-                        />
-                      </div>
-                    )}
-
-                    {(explanations[q] || suggestions[q]) && (
-                      <div className="mt-4 space-y-3 animate-fade-in">
-                        {explanations[q] && (
-                          <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                            <p className="text-sm">
-                              <span className="font-semibold text-primary flex items-center gap-2 mb-2">
-                                <HelpCircle className="h-4 w-4" />
-                                Why it matters:
-                              </span>
-                              <span className="text-muted-foreground">{explanations[q]}</span>
-                            </p>
-                          </div>
-                        )}
-                        {suggestions[q] && (
-                          <div className="p-4 rounded-lg bg-accent/5 border border-accent/20">
-                            <div className="text-sm">
-                              <span className="font-semibold text-accent flex items-center gap-2 mb-2">
-                                <Lightbulb className="h-4 w-4" />
-                                Suggestions:
-                              </span>
-                              <div className="whitespace-pre-wrap text-muted-foreground">{suggestions[q]}</div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        ))}
+                  );
+                })}
+                </CardContent>
+              </Card>
+            );
+          })}
         </div>
 
         <footer className="mt-12 flex items-center justify-between p-6 bg-card/50 backdrop-blur-sm rounded-xl border shadow-lg">

@@ -186,7 +186,7 @@ export const LAYER_5_QUESTIONS: Record<string, string[]> = {
   ],
 };
 
-export const LAYER_6_QUESTIONS: Record<string, string[] | string> = {
+export const LAYER_6_QUESTIONS: Record<string, string[] | { instructions: string; questions: string[] }> = {
   "Self_Synthesis": [
     "Based on my intelligence strengths, the types of activities I naturally enjoy are: (open-ended)",
     "Based on my personality, I thrive in environments that are: (open-ended)",
@@ -219,19 +219,20 @@ export const LAYER_6_QUESTIONS: Record<string, string[] | string> = {
     "What fears or doubts do you still have? (open-ended)",
     "What kind of support would help you feel more confident? (open-ended)",
   ],
-  "Career_Clustering": [
-    "Creative & Expressive (High linguistic/artistic, intuitive, low structure, values expression)",
-    "Analytical & Investigative (Logical-mathematical, investigative, high in openness & autonomy)",
-    "Social Impact & People-Centric (Interpersonal, high empathy, values connection, collaboration)",
-    "Structured & Strategic (Conventional/enterprising, conscientious, prefers clarity, order)",
-    "Tech & Engineering (Realistic + logical, enjoys tools, systems, innovation)",
-    "Nature & Sustainability (Naturalistic, values environment, real-world application)",
-    "Entrepreneurial & Leadership (High enterprising, self-determined, values risk-taking and autonomy)",
-  ],
+  "Career_Clustering": {
+    instructions: "Career Clustering helps identify which career groupings align best with your personality, skills, and interests. Based on your previous responses, rate how well each career cluster describes you or your ideal work environment. If none fit perfectly, you can specify your own cluster in 'Other'.",
+    questions: [
+      "Creative & Expressive (High linguistic/artistic, intuitive, low structure, values expression)",
+      "Analytical & Investigative (Logical-mathematical, investigative, high in openness & autonomy)",
+      "Social Impact & People-Centric (Interpersonal, high empathy, values connection, collaboration)",
+      "Structured & Strategic (Conventional/enterprising, conscientious, prefers clarity, order)",
+      "Tech & Engineering (Realistic + logical, enjoys tools, systems, innovation)",
+      "Nature & Sustainability (Naturalistic, values environment, real-world application)",
+      "Entrepreneurial & Leadership (High enterprising, self-determined, values risk-taking and autonomy)",
+      "Other (Please specify your own career cluster)"
+    ]
+  },
   "Action_Plan": [
-    "What are 3 things you can do in the next 30 days to explore your top choice(s)? (open-ended)",
-    "What specific skills or knowledge gaps do you need to address? (open-ended)",
-    "What timeline do you want to give yourself before making a decision? (3 months, 6 months, 1 year)",
     "Who can help you on this journey? (Mentors, peers, family, online groups) (open-ended)",
   ],
 };
