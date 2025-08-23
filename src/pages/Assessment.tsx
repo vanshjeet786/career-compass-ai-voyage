@@ -34,6 +34,25 @@ const getLayerData = (layer: LayerKey) => {
   }
 };
 
+// Function to check if a question is open-ended (Layer 6)
+const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
+  if (layer !== 6) return false;
+  
+  // Improved: Use a regex pattern for more flexible matching of open-ended questions
+  const openEndedPatterns = [
+    /\(open-ended\)$/i,
+    /^How would you/i,
+    /^What kind/i,
+    /^What are \d+/i,
+    /^Who can help/i,
+    /^What specific skills/i,
+    /^What timeline/i,
+    /^What fears or doubts/i,
+    /^What kind of support/i,
+  ];
+  return openEndedPatterns.some(pattern => pattern.test(question));
+};
+
 const Assessment = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
@@ -65,55 +84,66 @@ const Assessment = () => {
     canonical.href = window.location.origin + '/assessment';
   }, [layer]);
 
+  // Load or create assessment
   useEffect(() => {
     if (!user) return;
-    (async () => {
-      const { data } = await supabase
-        .from("assessments")
-        .select("id, current_layer")
-        .eq("user_id", user.id)
-        .eq("status", "in_progress")
-        .limit(1);
-
-      if (data && data.length) {
-        setAssessmentId(data[0].id);
-        setLayer((data[0].current_layer as number) as LayerKey);
-      } else {
-        const { data: created, error } = await supabase
+    const loadAssessment = async () => {
+      try {
+        const { data } = await supabase
           .from("assessments")
-          .insert({ user_id: user.id })
           .select("id, current_layer")
-          .single();
-        if (error) {
-          toast({ title: "Error", description: error.message, variant: "destructive" });
+          .eq("user_id", user.id)
+          .eq("status", "in_progress")
+          .limit(1);
+
+        if (data && data.length) {
+          setAssessmentId(data[0].id);
+          setLayer((data[0].current_layer as number) as LayerKey);
         } else {
+          const { data: created, error } = await supabase
+            .from("assessments")
+            .insert({ user_id: user.id })
+            .select("id, current_layer")
+            .single();
+          if (error) throw error;
           setAssessmentId(created!.id);
           setLayer((created!.current_layer as number) as LayerKey);
         }
+      } catch (error: any) {
+        toast({ title: "Error loading assessment", description: error.message, variant: "destructive" });
       }
-    })();
-  }, [user]);
+    };
+    loadAssessment();
+  }, [user, toast]);
 
   const layerData = useMemo(() => getLayerData(layer), [layer]);
 
   const saveResponse = async (questionId: string, value: any) => {
     if (!assessmentId) return;
     setResponses((prev) => ({ ...prev, [questionId]: value }));
-    await supabase.from("assessment_responses").insert({
-      assessment_id: assessmentId,
-      layer_number: layer,
-      question_id: questionId,
-      response_value: value,
-    });
+    try {
+      await supabase.from("assessment_responses").insert({
+        assessment_id: assessmentId,
+        layer_number: layer,
+        question_id: questionId,
+        response_value: value,
+      });
+    } catch (error: any) {
+      toast({ title: "Error saving response", description: error.message, variant: "destructive" });
+    }
   };
 
   const callAI = async (
     mode: "explain" | "suggest",
     question: string,
   ) => {
+    const cacheKey = question + mode;
+    if ((mode === "explain" && explanations[question]) || (mode === "suggest" && suggestions[question])) {
+      return; // Skip if already fetched
+    }
     try {
-      setAiLoading(question + mode);
-      const { data, error } = await supabase.functions.invoke("hf-assist", {
+      setAiLoading(cacheKey);
+      const { data, error } = await supabase.functions.invoke("gemini-assist", {
         body: { mode, question, context: { layer, responses } },
       });
       if (error) throw error;
@@ -130,14 +160,18 @@ const Assessment = () => {
     if (!assessmentId) return;
     const next = (layer + 1) as LayerKey;
     const done = next > 6;
-    if (done) {
-      await supabase.from("assessments").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", assessmentId);
-      toast({ title: "Assessment completed", description: "View your results now." });
-      window.location.href = "/results?assess=" + assessmentId;
-      return;
+    try {
+      if (done) {
+        await supabase.from("assessments").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", assessmentId);
+        toast({ title: "Assessment completed", description: "View your results now." });
+        window.location.href = "/results?assess=" + assessmentId;
+      } else {
+        setLayer(next);
+        await supabase.from("assessments").update({ current_layer: next }).eq("id", assessmentId);
+      }
+    } catch (error: any) {
+      toast({ title: "Error advancing layer", description: error.message, variant: "destructive" });
     }
-    setLayer(next);
-    await supabase.from("assessments").update({ current_layer: next }).eq("id", assessmentId);
   };
 
   const prevLayer = async () => {
@@ -175,7 +209,7 @@ const Assessment = () => {
           {Object.entries(layerData).map(([category, questions], catIdx) => {
             const isCareerClustering = category === "Career_Clustering" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
             const actualQuestions = isCareerClustering ? (questions as any).questions : questions as string[];
-            
+
             return (
               <Card key={category} className="animate-fade-in hover-scale border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm" style={{ animationDelay: `${catIdx * 100}ms` }}>
                 <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
@@ -192,6 +226,8 @@ const Assessment = () => {
                 <CardContent className="space-y-6 p-6">
                   {actualQuestions.map((q, idx) => {
                     const isOtherOption = q.startsWith("Other (");
+                    const showSuggestButton = isOpenEndedQuestion(layer, q) || isCareerClustering;
+
                     return (
                       <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
                         <div className="flex items-start justify-between gap-4 mb-4">
@@ -216,20 +252,22 @@ const Assessment = () => {
                               )}
                               Explain
                             </Button>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => callAI("suggest", q)} 
-                              disabled={aiLoading === q + "suggest"}
-                              className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200"
-                            >
-                              {aiLoading === q + "suggest" ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <Lightbulb className="h-4 w-4 mr-1" />
-                              )}
-                              Suggest
-                            </Button>
+                            {showSuggestButton && (
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => callAI("suggest", q)} 
+                                disabled={aiLoading === q + "suggest"}
+                                className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200"
+                              >
+                                {aiLoading === q + "suggest" ? (
+                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                ) : (
+                                  <Lightbulb className="h-4 w-4 mr-1" />
+                                )}
+                                Suggest
+                              </Button>
+                            )}
                           </div>
                         </div>
 
@@ -310,9 +348,9 @@ const Assessment = () => {
                             )}
                           </div>
                         )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
             );
