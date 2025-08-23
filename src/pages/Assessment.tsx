@@ -52,6 +52,8 @@ const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
          question.includes("What kind of support");
 };
 
+type ResponseValue = { label: string; value: number } | { text: string };
+
 const Assessment = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
@@ -60,7 +62,7 @@ const Assessment = () => {
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [suggestions, setSuggestions] = useState<Record<string, string>>({});
-  const [responses, setResponses] = useState<Record<string, any>>({});
+  const [responses, setResponses] = useState<Record<string, ResponseValue>>({});
 
   // SEO: title, description, canonical
   useEffect(() => {
@@ -110,11 +112,11 @@ const Assessment = () => {
         }
       }
     })();
-  }, [user]);
+  }, [user, toast]);
 
   const layerData = useMemo(() => getLayerData(layer), [layer]);
 
-  const saveResponse = async (questionId: string, value: any) => {
+  const saveResponse = async (questionId: string, value: ResponseValue) => {
     if (!assessmentId) return;
     setResponses((prev) => ({ ...prev, [questionId]: value }));
     await supabase.from("assessment_responses").insert({
@@ -137,8 +139,23 @@ const Assessment = () => {
       if (error) throw error;
       if (mode === "explain") setExplanations((p) => ({ ...p, [question]: data.text }));
       if (mode === "suggest") setSuggestions((p) => ({ ...p, [question]: data.text }));
-    } catch (e: any) {
-      toast({ title: "AI error", description: e.message ?? String(e), variant: "destructive" });
+    } catch (e: unknown) {
+      let message = "An unknown error occurred.";
+      if (e instanceof Error) {
+        message = e.message;
+      }
+
+      // Check for the specific API key error from the edge function
+      if (typeof message === 'string' && message.includes("Missing GEMINI_API_KEY")) {
+        toast({
+          title: "AI Feature Not Configured",
+          description: "The AI features are not enabled. The GEMINI_API_KEY needs to be set by the site administrator in the Supabase project settings.",
+          variant: "destructive",
+          duration: 10000, // Show for longer
+        });
+      } else {
+        toast({ title: "AI error", description: message, variant: "destructive" });
+      }
     } finally {
       setAiLoading(null);
     }
