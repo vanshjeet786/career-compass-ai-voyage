@@ -65,7 +65,10 @@ const Results = () => {
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        setRows(data || []);
+        setRows(data?.map(row => ({
+          ...row,
+          response_value: row.response_value as ResponseValue
+        })) || []);
       }
     })();
   }, [assessId, toast]);
@@ -73,7 +76,7 @@ const Results = () => {
   const catAverages = useMemo(() => {
     const map: Record<string, { sum: number; count: number }> = {};
     for (const r of rows) {
-      if (typeof r.response_value?.value === "number") {
+      if (r.response_value && 'value' in r.response_value && typeof r.response_value.value === "number") {
         const cat = r.question_id.split(":")[0] || r.question_id;
         if (!map[cat]) map[cat] = { sum: 0, count: 0 };
         map[cat].sum += r.response_value.value;

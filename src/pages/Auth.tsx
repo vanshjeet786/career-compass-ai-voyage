@@ -51,11 +51,7 @@ const Auth = () => {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ 
           email, 
-          password,
-          options: {
-            // This will allow sign in even if email is not confirmed (if enabled in Supabase settings)
-            skipEmailConfirmCheck: true
-          }
+          password
         });
         if (error) throw error;
         toast({ title: "Welcome back", description: "You are now signed in." });

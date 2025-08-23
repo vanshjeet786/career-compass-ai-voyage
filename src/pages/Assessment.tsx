@@ -282,7 +282,7 @@ const Assessment = () => {
                           layer <= 5 ? (
                             <div className="space-y-3">
                               <RadioGroup
-                                value={responses[q]?.label || ""}
+                                value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
                                 onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
                                 className="grid grid-cols-1 md:grid-cols-5 gap-3"
                               >
@@ -298,7 +298,7 @@ const Assessment = () => {
                             <div className="space-y-3">
                               <Textarea
                                 placeholder="Share your thoughts, experiences, and insights..."
-                                value={responses[q]?.text || ""}
+                                value={responses[q] && 'text' in responses[q] ? (responses[q] as { text: string }).text : ""}
                                 onChange={(e) => saveResponse(q, { text: e.target.value })}
                                 className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
                               />
@@ -307,7 +307,7 @@ const Assessment = () => {
                         ) : (
                           <div className="space-y-4">
                             <RadioGroup
-                              value={responses[q]?.label || ""}
+                              value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
                               onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
                               className="grid grid-cols-1 md:grid-cols-5 gap-3"
                             >
@@ -321,7 +321,7 @@ const Assessment = () => {
                             {isOtherOption && (
                               <Textarea
                                 placeholder="Please specify your own career cluster..."
-                                value={responses[q]?.customText || ""}
+                                value={responses[q] && 'customText' in responses[q] ? (responses[q] as { customText: string }).customText : ""}
                                 onChange={(e) => saveResponse(q, { ...responses[q], customText: e.target.value })}
                                 className="min-h-[80px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
                               />
