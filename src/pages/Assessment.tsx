@@ -53,6 +53,11 @@ const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
   return openEndedPatterns.some(pattern => pattern.test(question));
 };
 
+type ResponseValue = 
+  | { label: string; value: number }
+  | { text: string }
+  | { label: string; value: number; customText: string };
+
 const Assessment = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
@@ -61,7 +66,7 @@ const Assessment = () => {
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [suggestions, setSuggestions] = useState<Record<string, string>>({});
-  const [responses, setResponses] = useState<Record<string, any>>({});
+  const [responses, setResponses] = useState<Record<string, ResponseValue>>({});
 
   // SEO: title, description, canonical
   useEffect(() => {
@@ -113,12 +118,13 @@ const Assessment = () => {
         toast({ title: "Error loading assessment", description: error.message, variant: "destructive" });
       }
     };
+    // Immediately invoke to load assessment on mount
     loadAssessment();
   }, [user, toast]);
 
   const layerData = useMemo(() => getLayerData(layer), [layer]);
 
-  const saveResponse = async (questionId: string, value: any) => {
+  const saveResponse = async (questionId: string, value: ResponseValue) => {
     if (!assessmentId) return;
     setResponses((prev) => ({ ...prev, [questionId]: value }));
     try {
@@ -149,8 +155,9 @@ const Assessment = () => {
       if (error) throw error;
       if (mode === "explain") setExplanations((p) => ({ ...p, [question]: data.text }));
       if (mode === "suggest") setSuggestions((p) => ({ ...p, [question]: data.text }));
-    } catch (e: any) {
-      toast({ title: "AI error", description: e.message ?? String(e), variant: "destructive" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      toast({ title: "AI error", description: message, variant: "destructive" });
     } finally {
       setAiLoading(null);
     }
@@ -275,7 +282,7 @@ const Assessment = () => {
                           layer <= 5 ? (
                             <div className="space-y-3">
                               <RadioGroup
-                                value={responses[q]?.label || ""}
+                                value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
                                 onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
                                 className="grid grid-cols-1 md:grid-cols-5 gap-3"
                               >
@@ -291,7 +298,7 @@ const Assessment = () => {
                             <div className="space-y-3">
                               <Textarea
                                 placeholder="Share your thoughts, experiences, and insights..."
-                                value={responses[q]?.text || ""}
+                                value={responses[q] && 'text' in responses[q] ? (responses[q] as { text: string }).text : ""}
                                 onChange={(e) => saveResponse(q, { text: e.target.value })}
                                 className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
                               />
@@ -300,7 +307,7 @@ const Assessment = () => {
                         ) : (
                           <div className="space-y-4">
                             <RadioGroup
-                              value={responses[q]?.label || ""}
+                              value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
                               onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
                               className="grid grid-cols-1 md:grid-cols-5 gap-3"
                             >
@@ -314,7 +321,7 @@ const Assessment = () => {
                             {isOtherOption && (
                               <Textarea
                                 placeholder="Please specify your own career cluster..."
-                                value={responses[q]?.customText || ""}
+                                value={responses[q] && 'customText' in responses[q] ? (responses[q] as { customText: string }).customText : ""}
                                 onChange={(e) => saveResponse(q, { ...responses[q], customText: e.target.value })}
                                 className="min-h-[80px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
                               />

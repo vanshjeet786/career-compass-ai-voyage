@@ -51,21 +51,18 @@ const Auth = () => {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ 
           email, 
-          password,
-          options: {
-            // This will allow sign in even if email is not confirmed (if enabled in Supabase settings)
-            skipEmailConfirmCheck: true
-          }
+          password
         });
         if (error) throw error;
         toast({ title: "Welcome back", description: "You are now signed in." });
         navigate("/assess");
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Invalid credentials. Please check your email and password.";
       console.error("Auth error:", e);
       toast({ 
         title: "Auth error", 
-        description: e.message || "Invalid credentials. Please check your email and password.",
+        description: message,
         variant: "destructive" 
       });
     } finally {
@@ -78,8 +75,9 @@ const Auth = () => {
       const redirectUrl = `${window.location.origin}/`;
       const { error } = await supabase.auth.signInWithOAuth({ provider, options: { redirectTo: redirectUrl } });
       if (error) throw error;
-    } catch (e: any) {
-      toast({ title: "OAuth error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "An unknown error occurred.";
+      toast({ title: "OAuth error", description: message, variant: "destructive" });
     }
   };
 
