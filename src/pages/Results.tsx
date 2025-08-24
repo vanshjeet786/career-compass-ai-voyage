@@ -15,9 +15,11 @@ function useQuery() {
   return new URLSearchParams(useLocation().search);
 }
 
+type ResponseValue = { label: string; value: number } | { text: string };
+
 interface RespRow {
   question_id: string;
-  response_value: any;
+  response_value: ResponseValue;
   layer_number: number;
 }
 
@@ -63,15 +65,18 @@ const Results = () => {
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        setRows((data as any) || []);
+        setRows(data?.map(row => ({
+          ...row,
+          response_value: row.response_value as ResponseValue
+        })) || []);
       }
     })();
-  }, [assessId]);
+  }, [assessId, toast]);
 
   const catAverages = useMemo(() => {
     const map: Record<string, { sum: number; count: number }> = {};
     for (const r of rows) {
-      if (typeof r.response_value?.value === "number") {
+      if (r.response_value && 'value' in r.response_value && typeof r.response_value.value === "number") {
         const cat = r.question_id.split(":")[0] || r.question_id;
         if (!map[cat]) map[cat] = { sum: 0, count: 0 };
         map[cat].sum += r.response_value.value;
@@ -94,8 +99,9 @@ const Results = () => {
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       pdf.addImage(imgData, "PNG", 20, 20, imgWidth, Math.min(imgHeight, pageHeight - 40));
       pdf.save("career-compass-report.pdf");
-    } catch (e: any) {
-      toast({ title: "PDF error", description: e.message, variant: "destructive" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "An unknown error occurred.";
+      toast({ title: "PDF error", description: message, variant: "destructive" });
     } finally {
       setGenerating(false);
     }
@@ -125,8 +131,9 @@ const Results = () => {
       });
       if (error) throw error;
       setChat((c) => [...c, { from: "ai", text: data.text }]);
-    } catch (e: any) {
-      toast({ title: "Chat error", description: e.message ?? String(e), variant: "destructive" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "An unknown error occurred.";
+      toast({ title: "Chat error", description: message, variant: "destructive" });
     }
   };
 
