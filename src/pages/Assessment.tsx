@@ -92,7 +92,7 @@ const Assessment = () => {
   // Load or create assessment
   useEffect(() => {
     if (!user) return;
-    const loadAssessment = async () => {
+    (async () => {
       try {
         const { data } = await supabase
           .from("assessments")
@@ -117,9 +117,7 @@ const Assessment = () => {
       } catch (error: any) {
         toast({ title: "Error loading assessment", description: error.message, variant: "destructive" });
       }
-    };
-    // Immediately invoke to load assessment on mount
-    loadAssessment();
+    })();
   }, [user, toast]);
 
   const layerData = useMemo(() => getLayerData(layer), [layer]);
@@ -156,8 +154,20 @@ const Assessment = () => {
       if (mode === "explain") setExplanations((p) => ({ ...p, [question]: data.text }));
       if (mode === "suggest") setSuggestions((p) => ({ ...p, [question]: data.text }));
     } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : String(e);
-      toast({ title: "AI error", description: message, variant: "destructive" });
+      let message = "An unknown error occurred.";
+      if (e instanceof Error) {
+        message = e.message;
+      }
+      if (typeof message === 'string' && message.includes("Missing GEMINI_API_KEY")) {
+        toast({
+          title: "AI Feature Not Configured",
+          description: "The AI features are not enabled. The GEMINI_API_KEY needs to be set by the site administrator in the Supabase project settings.",
+          variant: "destructive",
+          duration: 10000,
+        });
+      } else {
+        toast({ title: "AI error", description: message, variant: "destructive" });
+      }
     } finally {
       setAiLoading(null);
     }
