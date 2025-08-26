@@ -35,25 +35,25 @@ const Index = () => {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-16 text-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-5xl font-bold mb-6 bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-            Discover Your Career Compass
+          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent animate-fade-up animate-gradient-x">
+            Navigate Your Perfect Career Path
           </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
-            Navigate your professional journey with our comprehensive 6-layer assessment. 
-            Uncover your strengths, aptitudes, and ideal career path with AI-powered insights.
+          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto animate-fade-up" style={{ animationDelay: '0.2s' }}>
+            Find your professional north star with Career Compass. Our scientifically-backed 6-layer assessment 
+            reveals your unique strengths and guides you to careers where you'll truly thrive.
           </p>
           
           {user ? (
-            <div className="space-y-4">
+            <div className="space-y-4 animate-bounce-in" style={{ animationDelay: '0.4s' }}>
               <p className="text-lg text-foreground">Welcome back, {user.email}!</p>
-              <Button asChild size="lg" className="text-lg px-8 py-4">
+              <Button asChild size="lg" className="text-lg px-8 py-4 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl animate-float">
                 <Link to="/assessment">
-                  Continue Assessment <ArrowRight className="ml-2 h-5 w-5" />
+                  Continue Your Journey <ArrowRight className="ml-2 h-5 w-5" />
                 </Link>
               </Button>
             </div>
           ) : (
-            <Button asChild size="lg" className="text-lg px-8 py-4">
+            <Button asChild size="lg" className="text-lg px-8 py-4 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl animate-bounce-in animate-float" style={{ animationDelay: '0.4s' }}>
               <Link to="/auth">
                 Start Your Journey <ArrowRight className="ml-2 h-5 w-5" />
               </Link>
@@ -72,10 +72,13 @@ const Index = () => {
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="text-center">
+          <Card className="text-center group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border-l-4 border-l-primary animate-fade-up" style={{ animationDelay: '0.1s' }}>
             <CardHeader>
-              <Brain className="h-12 w-12 mx-auto text-primary mb-4" />
-              <CardTitle>Multi-Intelligence Assessment</CardTitle>
+              <div className="relative">
+                <Brain className="h-12 w-12 mx-auto text-primary mb-4 group-hover:scale-110 transition-transform duration-300 animate-float" />
+                <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </div>
+              <CardTitle className="group-hover:text-primary transition-colors">Multi-Intelligence Assessment</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -84,10 +87,13 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          <Card className="text-center">
+          <Card className="text-center group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border-l-4 border-l-secondary animate-fade-up" style={{ animationDelay: '0.2s' }}>
             <CardHeader>
-              <Target className="h-12 w-12 mx-auto text-primary mb-4" />
-              <CardTitle>6-Layer Deep Dive</CardTitle>
+              <div className="relative">
+                <Target className="h-12 w-12 mx-auto text-secondary mb-4 group-hover:scale-110 transition-transform duration-300 animate-float" style={{ animationDelay: '0.5s' }} />
+                <div className="absolute inset-0 bg-secondary/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </div>
+              <CardTitle className="group-hover:text-secondary transition-colors">6-Layer Deep Dive</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -96,10 +102,13 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          <Card className="text-center">
+          <Card className="text-center group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border-l-4 border-l-accent animate-fade-up" style={{ animationDelay: '0.3s' }}>
             <CardHeader>
-              <TrendingUp className="h-12 w-12 mx-auto text-primary mb-4" />
-              <CardTitle>AI-Powered Insights</CardTitle>
+              <div className="relative">
+                <TrendingUp className="h-12 w-12 mx-auto text-accent mb-4 group-hover:scale-110 transition-transform duration-300 animate-float" style={{ animationDelay: '1s' }} />
+                <div className="absolute inset-0 bg-accent/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </div>
+              <CardTitle className="group-hover:text-accent transition-colors">AI-Powered Insights</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -108,10 +117,13 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          <Card className="text-center">
+          <Card className="text-center group hover:shadow-xl transition-all duration-300 hover:-translate-y-2 border-l-4 border-l-primary animate-fade-up" style={{ animationDelay: '0.4s' }}>
             <CardHeader>
-              <Users className="h-12 w-12 mx-auto text-primary mb-4" />
-              <CardTitle>Career Counselor Chat</CardTitle>
+              <div className="relative">
+                <Users className="h-12 w-12 mx-auto text-primary mb-4 group-hover:scale-110 transition-transform duration-300 animate-float" style={{ animationDelay: '1.5s' }} />
+                <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </div>
+              <CardTitle className="group-hover:text-primary transition-colors">Career Counselor Chat</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
@@ -133,20 +145,20 @@ const Index = () => {
 
         <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {[
-            { layer: 1, title: "Core Aptitudes", desc: "Mathematical, verbal, and logical reasoning" },
-            { layer: 2, title: "Cognitive Styles", desc: "How you process and organize information" },
-            { layer: 3, title: "Multiple Intelligences", desc: "Your unique intelligence profile" },
-            { layer: 4, title: "Personality Traits", desc: "Work style preferences and behaviors" },
-            { layer: 5, title: "Interests & Values", desc: "What motivates and energizes you" },
-            { layer: 6, title: "Career Exploration", desc: "Open-ended reflection and goals" }
-          ].map(({ layer, title, desc }, i) => (
-            <Card key={i}>
+            { layer: 1, title: "Core Aptitudes", desc: "Mathematical, verbal, and logical reasoning", color: "primary" },
+            { layer: 2, title: "Cognitive Styles", desc: "How you process and organize information", color: "secondary" },
+            { layer: 3, title: "Multiple Intelligences", desc: "Your unique intelligence profile", color: "accent" },
+            { layer: 4, title: "Personality Traits", desc: "Work style preferences and behaviors", color: "primary" },
+            { layer: 5, title: "Interests & Values", desc: "What motivates and energizes you", color: "secondary" },
+            { layer: 6, title: "Career Exploration", desc: "Open-ended reflection and goals", color: "accent" }
+          ].map(({ layer, title, desc, color }, i) => (
+            <Card key={i} className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-1 animate-scale-in" style={{ animationDelay: `${i * 0.1}s` }}>
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                  <div className={`h-8 w-8 rounded-full bg-${color} text-${color}-foreground flex items-center justify-center text-sm font-bold group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
                     {layer}
                   </div>
-                  <CardTitle className="text-lg">{title}</CardTitle>
+                  <CardTitle className={`text-lg group-hover:text-${color} transition-colors`}>{title}</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>

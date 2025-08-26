@@ -8,7 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, HelpCircle, Lightbulb, ArrowRight, ArrowLeft } from "lucide-react";
+import { Loader2, HelpCircle, Lightbulb, ArrowRight, ArrowLeft, Plus } from "lucide-react";
+import { useSmartExplanations } from "@/hooks/useSmartExplanations";
+import { useSmartSuggestions } from "@/hooks/useSmartSuggestions";
 import {
   RESPONSE_SCALE,
   LAYER_1_QUESTIONS,
@@ -63,10 +65,15 @@ const Assessment = () => {
   const { toast } = useToast();
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [layer, setLayer] = useState<LayerKey>(1);
+  const [responses, setResponses] = useState<Record<string, ResponseValue>>({});
+  const [expandedExplanations, setExpandedExplanations] = useState<Record<string, boolean>>({});
+  const [showAISuggestions, setShowAISuggestions] = useState<Record<string, boolean>>({});
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [explanations, setExplanations] = useState<Record<string, string>>({});
-  const [suggestions, setSuggestions] = useState<Record<string, string>>({});
-  const [responses, setResponses] = useState<Record<string, ResponseValue>>({});
+  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
+  
+  const explanationLoading = aiLoading?.includes('explain') || false;
+  const suggestionLoading = aiLoading?.includes('suggest') || false;
 
   // SEO: title, description, canonical
   useEffect(() => {
@@ -137,37 +144,33 @@ const Assessment = () => {
     }
   };
 
-  const callAI = async (
-    mode: "explain" | "suggest",
-    question: string,
-  ) => {
-    const cacheKey = question + mode;
-    if ((mode === "explain" && explanations[question]) || (mode === "suggest" && suggestions[question])) {
-      return; // Skip if already fetched
-    }
+  const handleExplanation = async (question: string) => {
+    if (explanations[question]) return;
+    setAiLoading(question + 'explain');
     try {
-      setAiLoading(cacheKey);
       const { data, error } = await supabase.functions.invoke("gemini-assist", {
-        body: { mode, question, context: { layer, responses } },
+        body: { mode: 'explain', question, context: { layer, responses } },
       });
       if (error) throw error;
-      if (mode === "explain") setExplanations((p) => ({ ...p, [question]: data.text }));
-      if (mode === "suggest") setSuggestions((p) => ({ ...p, [question]: data.text }));
-    } catch (e: unknown) {
-      let message = "An unknown error occurred.";
-      if (e instanceof Error) {
-        message = e.message;
-      }
-      if (typeof message === 'string' && message.includes("Missing GEMINI_API_KEY")) {
-        toast({
-          title: "AI Feature Not Configured",
-          description: "The AI features are not enabled. The GEMINI_API_KEY needs to be set by the site administrator in the Supabase project settings.",
-          variant: "destructive",
-          duration: 10000,
-        });
-      } else {
-        toast({ title: "AI error", description: message, variant: "destructive" });
-      }
+      setExplanations(prev => ({ ...prev, [question]: data.text }));
+    } catch (error: any) {
+      toast({ title: "AI error", description: error.message, variant: "destructive" });
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
+  const handleSuggestions = async (question: string) => {
+    if (suggestions[question]) return;
+    setAiLoading(question + 'suggest');
+    try {
+      const { data, error } = await supabase.functions.invoke("gemini-assist", {
+        body: { mode: 'suggest', question, context: { layer, responses } },
+      });
+      if (error) throw error;
+      setSuggestions(prev => ({ ...prev, [question]: [data.text] }));
+    } catch (error: any) {
+      toast({ title: "AI error", description: error.message, variant: "destructive" });
     } finally {
       setAiLoading(null);
     }
@@ -258,32 +261,27 @@ const Assessment = () => {
                             <Button 
                               variant="outline" 
                               size="sm" 
-                              onClick={() => callAI("explain", q)} 
-                              disabled={aiLoading === q + "explain"}
-                              className="hover:bg-primary/10 hover:border-primary/20 transition-all duration-200"
+                              onClick={() => handleExplanation(q)} 
+                              className="hover:bg-primary/10 hover:border-primary/20 transition-all duration-200 animate-scale-in"
                             >
-                              {aiLoading === q + "explain" ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <HelpCircle className="h-4 w-4 mr-1" />
-                              )}
+                              <HelpCircle className="h-4 w-4 mr-1" />
                               Explain
                             </Button>
                             {showSuggestButton && (
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={() => callAI("suggest", q)} 
-                                disabled={aiLoading === q + "suggest"}
-                                className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200"
-                              >
-                                {aiLoading === q + "suggest" ? (
-                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                                ) : (
-                                  <Lightbulb className="h-4 w-4 mr-1" />
-                                )}
-                                Suggest
-                              </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              onClick={() => handleSuggestions(q)} 
+                              disabled={aiLoading === q + 'suggest'}
+                              className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200 animate-scale-in"
+                            >
+                              {aiLoading === q + 'suggest' ? (
+                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              ) : (
+                                <Lightbulb className="h-4 w-4 mr-1" />
+                              )}
+                              Suggest
+                            </Button>
                             )}
                           </div>
                         </div>
@@ -342,24 +340,63 @@ const Assessment = () => {
                         {(explanations[q] || suggestions[q]) && (
                           <div className="mt-4 space-y-3 animate-fade-in">
                             {explanations[q] && (
-                              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
-                                <p className="text-sm">
+                              <div className="p-4 rounded-lg bg-primary/5 border border-primary/20 hover:shadow-md transition-all duration-300">
+                                <div className="text-sm">
                                   <span className="font-semibold text-primary flex items-center gap-2 mb-2">
                                     <HelpCircle className="h-4 w-4" />
                                     Why it matters:
                                   </span>
-                                  <span className="text-muted-foreground">{explanations[q]}</span>
-                                </p>
+                                  <span className="text-muted-foreground mb-3 block">{explanations[q]}</span>
+                                  {!expandedExplanations[q] && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => handleExpandedExplanation(q)}
+                                      disabled={explanationLoading}
+                                      className="text-primary hover:text-primary/80 p-0 h-auto font-medium"
+                                    >
+                                      {explanationLoading ? (
+                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Loading...</>
+                                      ) : (
+                                        <><Plus className="h-3 w-3 mr-1" /> Explain More</>
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             )}
-                            {suggestions[q] && (
-                              <div className="p-4 rounded-lg bg-accent/5 border border-accent/20">
+                            {suggestions[q] && Array.isArray(suggestions[q]) && (
+                              <div className="p-4 rounded-lg bg-accent/5 border border-accent/20 hover:shadow-md transition-all duration-300">
                                 <div className="text-sm">
-                                  <span className="font-semibold text-accent flex items-center gap-2 mb-2">
+                                  <span className="font-semibold text-accent flex items-center gap-2 mb-3">
                                     <Lightbulb className="h-4 w-4" />
-                                    Suggestions:
+                                    Smart Suggestions:
                                   </span>
-                                  <div className="whitespace-pre-wrap text-muted-foreground">{suggestions[q]}</div>
+                                  <div className="space-y-2">
+                                    {suggestions[q].map((suggestion: string, idx: number) => (
+                                      <div key={idx} className="flex items-start gap-2 p-2 rounded border border-accent/10 bg-background/50">
+                                        <div className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center font-semibold flex-shrink-0 mt-0.5">
+                                          {idx + 1}
+                                        </div>
+                                        <span className="text-muted-foreground text-sm">{suggestion}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {!showAISuggestions[q] && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => handleAISuggestions(q)}
+                                      disabled={suggestionLoading}
+                                      className="text-accent hover:text-accent/80 p-0 h-auto font-medium mt-3"
+                                    >
+                                      {suggestionLoading ? (
+                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Getting AI suggestions...</>
+                                      ) : (
+                                        <><Plus className="h-3 w-3 mr-1" /> Get AI Suggestions</>
+                                      )}
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             )}
