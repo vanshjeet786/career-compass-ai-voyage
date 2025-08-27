@@ -68,12 +68,8 @@ const Assessment = () => {
   const [responses, setResponses] = useState<Record<string, ResponseValue>>({});
   const [expandedExplanations, setExpandedExplanations] = useState<Record<string, boolean>>({});
   const [showAISuggestions, setShowAISuggestions] = useState<Record<string, boolean>>({});
-  const [aiLoading, setAiLoading] = useState<string | null>(null);
-  const [explanations, setExplanations] = useState<Record<string, string>>({});
-  const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
-  
-  const explanationLoading = aiLoading?.includes('explain') || false;
-  const suggestionLoading = aiLoading?.includes('suggest') || false;
+  const { getExplanation, getExpandedExplanation, explanations, expandedExplanations: expandedExplanationsData, loading: explanationLoading } = useSmartExplanations();
+  const { getSuggestions, getAISuggestions, suggestions, aiSuggestions, loading: suggestionLoading } = useSmartSuggestions();
 
   // SEO: title, description, canonical
   useEffect(() => {
@@ -145,35 +141,19 @@ const Assessment = () => {
   };
 
   const handleExplanation = async (question: string) => {
-    if (explanations[question]) return;
-    setAiLoading(question + 'explain');
-    try {
-      const { data, error } = await supabase.functions.invoke("gemini-assist", {
-        body: { mode: 'explain', question, context: { layer, responses } },
-      });
-      if (error) throw error;
-      setExplanations(prev => ({ ...prev, [question]: data.text }));
-    } catch (error: any) {
-      toast({ title: "AI error", description: error.message, variant: "destructive" });
-    } finally {
-      setAiLoading(null);
-    }
+    await getExplanation(question, layer);
   };
 
   const handleSuggestions = async (question: string) => {
-    if (suggestions[question]) return;
-    setAiLoading(question + 'suggest');
-    try {
-      const { data, error } = await supabase.functions.invoke("gemini-assist", {
-        body: { mode: 'suggest', question, context: { layer, responses } },
-      });
-      if (error) throw error;
-      setSuggestions(prev => ({ ...prev, [question]: [data.text] }));
-    } catch (error: any) {
-      toast({ title: "AI error", description: error.message, variant: "destructive" });
-    } finally {
-      setAiLoading(null);
-    }
+    await getSuggestions(question, layer, responses);
+  };
+
+  const handleExpandedExplanation = async (question: string) => {
+    await getExpandedExplanation(question, layer, responses);
+  };
+
+  const handleAISuggestions = async (question: string) => {
+    await getAISuggestions(question, layer, responses);
   };
 
   const nextLayer = async () => {
@@ -272,10 +252,10 @@ const Assessment = () => {
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleSuggestions(q)} 
-                              disabled={aiLoading === q + 'suggest'}
+                              disabled={suggestionLoading}
                               className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200 animate-scale-in"
                             >
-                              {aiLoading === q + 'suggest' ? (
+                              {suggestionLoading ? (
                                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                               ) : (
                                 <Lightbulb className="h-4 w-4 mr-1" />
@@ -347,7 +327,7 @@ const Assessment = () => {
                                     Why it matters:
                                   </span>
                                   <span className="text-muted-foreground mb-3 block">{explanations[q]}</span>
-                                  {!expandedExplanations[q] && (
+                                  {!expandedExplanationsData[q] && (
                                     <Button 
                                       variant="ghost" 
                                       size="sm"
