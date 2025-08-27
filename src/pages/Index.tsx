@@ -35,10 +35,10 @@ const Index = () => {
       {/* Hero Section */}
       <section className="container mx-auto px-4 py-16 text-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 text-foreground">
-            Navigate Your Perfect Career Path
+          <h1 className="text-5xl md:text-7xl font-display font-black mb-6 text-foreground animate-fade-up">
+            Navigate Your <span className="text-primary">Perfect</span> Career Path
           </h1>
-          <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+          <p className="text-xl font-manrope text-muted-foreground mb-8 max-w-2xl mx-auto animate-fade-up animation-delay-200">
             Find your professional north star with Career Compass. Our scientifically-backed 6-layer assessment 
             reveals your unique strengths and guides you to careers where you'll truly thrive.
           </p>
@@ -46,22 +46,22 @@ const Index = () => {
           {user ? (
             <div className="space-y-4">
               <p className="text-lg text-foreground">Welcome back, {user.email}!</p>
-              <Button asChild size="lg" className="text-lg px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground relative overflow-hidden group transition-colors duration-200 shadow-lg">
+              <Button asChild size="lg" className="font-montserrat font-bold text-2xl tracking-wider text-primary-foreground relative overflow-hidden group transition-all duration-300 shadow-lg shadow-primary/50 hover:shadow-primary/80 dark:shadow-primary/30 dark:hover:shadow-primary/50 rounded-full px-12 py-8 bg-[length:200%_200%] bg-gradient-to-r from-primary via-accent to-destructive animate-gradient-cycle hover:scale-105 hover:-translate-y-1 transform">
                 <Link to="/assessment">
-                  <span className="relative z-10">
-                    Continue Your Journey <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-200" />
+                  <span className="relative z-10 animate-text-glow">
+                    Continue Your Journey <ArrowRight className="ml-2 h-5 w-5 inline-block group-hover:translate-x-1 transition-transform duration-200" />
                   </span>
-                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 animate-shimmer" />
                 </Link>
               </Button>
             </div>
           ) : (
-            <Button asChild size="lg" className="text-lg px-8 py-4 bg-primary hover:bg-primary/90 text-primary-foreground relative overflow-hidden group transition-colors duration-200 shadow-lg">
+            <Button asChild size="lg" className="font-montserrat font-bold text-2xl tracking-wider text-primary-foreground relative overflow-hidden group transition-all duration-300 shadow-lg shadow-primary/50 hover:shadow-primary/80 dark:shadow-primary/30 dark:hover:shadow-primary/50 rounded-full px-12 py-8 bg-[length:200%_200%] bg-gradient-to-r from-primary via-accent to-destructive animate-gradient-cycle hover:scale-105 hover:-translate-y-1 transform">
               <Link to="/auth">
-                <span className="relative z-10">
-                  Start Your Journey <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-200" />
+                <span className="relative z-10 animate-text-glow">
+                  Start Your Journey <ArrowRight className="ml-2 h-5 w-5 inline-block group-hover:translate-x-1 transition-transform duration-200" />
                 </span>
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 animate-shimmer" />
               </Link>
             </Button>
           )}
@@ -71,56 +71,56 @@ const Index = () => {
       {/* Features Section */}
       <section className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">Why Choose Career Compass?</h2>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <h2 className="text-4xl font-poppins font-bold mb-4">Why Choose Career Compass?</h2>
+          <p className="text-lg font-manrope text-muted-foreground max-w-2xl mx-auto">
             Our scientifically-backed assessment combines multiple intelligence theories with AI assistance
           </p>
         </div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-primary">
+          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-primary bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
               <Brain className="h-12 w-12 mx-auto text-primary mb-4 group-hover:text-primary/80 transition-colors duration-200" />
-              <CardTitle className="group-hover:text-primary transition-colors duration-200">Multi-Intelligence Assessment</CardTitle>
+              <CardTitle className="font-poppins group-hover:text-primary transition-colors duration-200">Multi-Intelligence Assessment</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm font-manrope text-muted-foreground">
                 Evaluate across 8+ intelligence types including logical, linguistic, spatial, and interpersonal
               </p>
             </CardContent>
           </Card>
 
-          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-secondary">
+          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-secondary bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
               <Target className="h-12 w-12 mx-auto text-secondary mb-4 group-hover:text-secondary/80 transition-colors duration-200" />
-              <CardTitle className="group-hover:text-secondary transition-colors duration-200">6-Layer Deep Dive</CardTitle>
+              <CardTitle className="font-poppins group-hover:text-secondary transition-colors duration-200">6-Layer Deep Dive</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm font-manrope text-muted-foreground">
                 From core aptitudes to personality traits and career preferences - we cover it all
               </p>
             </CardContent>
           </Card>
 
-          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-accent">
+          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-accent bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
               <TrendingUp className="h-12 w-12 mx-auto text-accent mb-4 group-hover:text-accent/80 transition-colors duration-200" />
-              <CardTitle className="group-hover:text-accent transition-colors duration-200">AI-Powered Insights</CardTitle>
+              <CardTitle className="font-poppins group-hover:text-accent transition-colors duration-200">AI-Powered Insights</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm font-manrope text-muted-foreground">
                 Get personalized explanations and career suggestions powered by advanced AI
               </p>
             </CardContent>
           </Card>
 
-          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-primary">
+          <Card className="text-center group hover:shadow-lg transition-all duration-200 border-l-4 border-l-primary bg-gradient-to-br from-card to-muted/30">
             <CardHeader>
               <Users className="h-12 w-12 mx-auto text-primary mb-4 group-hover:text-primary/80 transition-colors duration-200" />
-              <CardTitle className="group-hover:text-primary transition-colors duration-200">Career Counselor Chat</CardTitle>
+              <CardTitle className="font-poppins group-hover:text-primary transition-colors duration-200">Career Counselor Chat</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm font-manrope text-muted-foreground">
                 Ask questions about your results and get personalized career guidance
               </p>
             </CardContent>
@@ -131,8 +131,8 @@ const Index = () => {
       {/* Assessment Layers Preview */}
       <section className="container mx-auto px-4 py-16 bg-muted/30">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold mb-4">The 6-Layer Assessment</h2>
-          <p className="text-lg text-muted-foreground">
+          <h2 className="text-4xl font-poppins font-bold mb-4">The 6-Layer Assessment</h2>
+          <p className="text-lg font-manrope text-muted-foreground">
             Each layer reveals different aspects of your professional profile
           </p>
         </div>
@@ -146,17 +146,17 @@ const Index = () => {
             { layer: 5, title: "Interests & Values", desc: "What motivates and energizes you", color: "secondary" },
             { layer: 6, title: "Career Exploration", desc: "Open-ended reflection and goals", color: "accent" }
           ].map(({ layer, title, desc, color }, i) => (
-            <Card key={i} className="group hover:shadow-lg transition-all duration-200">
+            <Card key={i} className="group hover:shadow-lg transition-all duration-200 bg-card">
               <CardHeader className="pb-3">
                 <div className="flex items-center gap-3">
                   <div className={`h-8 w-8 rounded-full bg-${color} text-${color}-foreground flex items-center justify-center text-sm font-bold group-hover:bg-${color}/80 transition-colors duration-200 shadow-lg`}>
                     {layer}
                   </div>
-                  <CardTitle className={`text-lg group-hover:text-${color} transition-colors duration-200`}>{title}</CardTitle>
+                  <CardTitle className={`text-lg font-poppins group-hover:text-${color} transition-colors duration-200`}>{title}</CardTitle>
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground">{desc}</p>
+                <p className="text-sm font-manrope text-muted-foreground">{desc}</p>
               </CardContent>
             </Card>
           ))}
@@ -167,7 +167,7 @@ const Index = () => {
       <section className="container mx-auto px-4 py-16">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold mb-4">What You'll Get</h2>
+            <h2 className="text-4xl font-poppins font-bold mb-4">What You'll Get</h2>
           </div>
 
           <div className="grid md:grid-cols-2 gap-8">
@@ -181,25 +181,25 @@ const Index = () => {
               ].map((benefit, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <CheckCircle className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                  <p className="text-foreground">{benefit}</p>
+                  <p className="font-manrope text-foreground">{benefit}</p>
                 </div>
               ))}
             </div>
 
-            <Card>
+            <Card className="bg-gradient-to-br from-card to-muted/30">
               <CardHeader>
-                <CardTitle>Ready to Start?</CardTitle>
+                <CardTitle className="font-poppins">Ready to Start?</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-muted-foreground mb-4">
+                <p className="font-manrope text-muted-foreground mb-4">
                   Join thousands who have discovered their ideal career path through our assessment.
                 </p>
                 {user ? (
-                  <Button asChild className="w-full">
+                  <Button asChild className="w-full font-montserrat font-bold">
                     <Link to="/assessment">Continue Assessment</Link>
                   </Button>
                 ) : (
-                  <Button asChild className="w-full">
+                  <Button asChild className="w-full font-montserrat font-bold">
                     <Link to="/auth">Get Started Free</Link>
                   </Button>
                 )}
