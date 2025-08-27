@@ -237,33 +237,33 @@ const Assessment = () => {
                             </span>
                             {q}
                           </p>
-                          <div className="flex gap-2">
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleExplanation(q)} 
-                              className="hover:bg-primary/10 hover:border-primary/20 transition-all duration-200 animate-scale-in"
-                            >
-                              <HelpCircle className="h-4 w-4 mr-1" />
-                              Explain
-                            </Button>
-                            {showSuggestButton && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleSuggestions(q)} 
-                              disabled={suggestionLoading}
-                              className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200 animate-scale-in"
-                            >
-                              {suggestionLoading ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                              ) : (
-                                <Lightbulb className="h-4 w-4 mr-1" />
-                              )}
-                              Suggest
-                            </Button>
-                            )}
-                          </div>
+                           <div className="flex gap-2">
+                             <Button 
+                               variant="outline" 
+                               size="sm" 
+                               onClick={() => handleExplanation(q)} 
+                               className="hover:bg-primary/10 hover:border-primary/20 transition-colors duration-200"
+                             >
+                               <HelpCircle className="h-4 w-4 mr-1" />
+                               Explain
+                             </Button>
+                             {showSuggestButton && (
+                             <Button 
+                               variant="outline" 
+                               size="sm" 
+                               onClick={() => handleSuggestions(q)} 
+                               disabled={suggestionLoading}
+                               className="hover:bg-accent/10 hover:border-accent/20 transition-colors duration-200"
+                             >
+                               {suggestionLoading ? (
+                                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                               ) : (
+                                 <Lightbulb className="h-4 w-4 mr-1" />
+                               )}
+                               Suggest
+                             </Button>
+                             )}
+                           </div>
                         </div>
 
                         {layer <= 5 || !isCareerClustering ? (
