@@ -14,7 +14,7 @@ export const PREDETERMINED_EXPLANATIONS: Record<string, string> = {
   
   "I enjoy reading and can understand complex texts easily": "Reading comprehension is fundamental to continuous learning and success in knowledge-based careers.",
   
-  "I can express my thoughts clearly in writing": "Written communication is critical in virtually all professional fields, especially in remote and digital work environments.",
+  "I enjoy writing essays, stories, or journal entries for fun.": "Written communication is critical in virtually all professional fields, especially in remote and digital work environments.",
   
   "I am skilled at explaining complex ideas to others": "This indicates teaching ability and leadership potential, valuable in management, training, and consulting roles.",
   
