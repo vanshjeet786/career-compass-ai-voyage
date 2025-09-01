@@ -9,7 +9,8 @@ import { useToast } from "@/components/ui/use-toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { Loader2, Download, Send } from "lucide-react";
+import { Loader2, Download, Send, ExternalLink, TrendingUp, DollarSign, Users } from "lucide-react";
+import { generateCareerRecommendations, type CareerRecommendation } from "@/data/careerRecommendations";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -85,6 +86,11 @@ const Results = () => {
     }
     return Object.entries(map).map(([name, v]) => ({ name, score: Number((v.sum / v.count).toFixed(2)) }));
   }, [rows]);
+
+  const careerRecommendations = useMemo(() => {
+    if (!catAverages.length) return [];
+    return generateCareerRecommendations(rows, catAverages);
+  }, [rows, catAverages]);
 
   const exportPDF = async () => {
     if (!pdfRef.current) return;
@@ -252,8 +258,91 @@ const Results = () => {
             </Card>
           </div>
 
+          {/* Career Recommendations Section */}
+          <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '300ms' }}>
+            <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
+              <CardTitle className="text-2xl flex items-center gap-3">
+                <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
+                Top Career Recommendations
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-2">
+                Based on your assessment results, here are careers that align with your strengths and interests
+              </p>
+            </CardHeader>
+            <CardContent className="p-8">
+              <div className="grid gap-6">
+                {careerRecommendations.map((career, index) => (
+                  <div key={career.title} className="border border-border/50 rounded-lg p-6 hover:shadow-lg transition-all duration-300 bg-background/50">
+                    <div className="flex items-start justify-between gap-4 mb-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-primary-foreground text-sm font-bold">
+                            #{index + 1}
+                          </div>
+                          <h3 className="text-xl font-semibold">{career.title}</h3>
+                          <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-sm font-medium">
+                            {career.compatibility}% Match
+                          </div>
+                        </div>
+                        <p className="text-muted-foreground text-sm mb-4">{career.explanation}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="grid md:grid-cols-3 gap-4 mb-4">
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/5 border border-accent/20">
+                        <DollarSign className="h-4 w-4 text-accent" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Salary Range</p>
+                          <p className="font-medium text-sm">{career.salaryRange}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <TrendingUp className="h-4 w-4 text-primary" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Growth Outlook</p>
+                          <p className="font-medium text-sm">{career.growthOutlook}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 p-3 rounded-lg bg-secondary/5 border border-secondary/20">
+                        <Users className="h-4 w-4 text-secondary" />
+                        <div>
+                          <p className="text-xs text-muted-foreground">Matching Factors</p>
+                          <p className="font-medium text-sm">{career.matchingFactors.length} strengths</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap gap-2">
+                        {career.keySkills.slice(0, 4).map(skill => (
+                          <span key={skill} className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs">
+                            {skill}
+                          </span>
+                        ))}
+                        {career.keySkills.length > 4 && (
+                          <span className="px-2 py-1 rounded-md bg-muted text-muted-foreground text-xs">
+                            +{career.keySkills.length - 4} more
+                          </span>
+                        )}
+                      </div>
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => window.open(career.onetLink, '_blank')}
+                        className="hover:bg-primary/10 hover:border-primary/20"
+                      >
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        View O*NET
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="grid xl:grid-cols-3 gap-8">
-            <Card className="xl:col-span-2 animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '300ms' }}>
+            <Card className="xl:col-span-2 animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '400ms' }}>
               <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
                 <CardTitle className="text-2xl flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
@@ -299,7 +388,7 @@ const Results = () => {
               </CardContent>
             </Card>
             
-            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '400ms' }}>
+            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '500ms' }}>
               <CardHeader className="bg-gradient-to-r from-accent/10 to-primary/10 border-b">
                 <CardTitle className="text-xl flex items-center gap-3">
                   <div className="w-3 h-3 rounded-full bg-gradient-to-r from-accent to-primary" />

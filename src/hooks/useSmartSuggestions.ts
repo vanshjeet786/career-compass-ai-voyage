@@ -10,7 +10,12 @@ export function useSmartSuggestions() {
   const { toast } = useToast();
 
   const getSuggestions = useCallback(async (question: string, layer: number, userResponses?: any) => {
-    // First, try to get predetermined suggestions
+    // For Layer 6, try AI first, then fall back to predetermined suggestions
+    if (layer === 6) {
+      return await getAISuggestions(question, layer, userResponses);
+    }
+    
+    // For layers 1-5, use predetermined suggestions first
     const predeterminedSuggestions = PREDETERMINED_SUGGESTIONS[question];
     
     if (predeterminedSuggestions && !suggestions[question]) {
@@ -38,12 +43,30 @@ export function useSmartSuggestions() {
     }
 
     try {
-      const response = await callAI('suggest', question, { layer, context });
+      // Build context from layers 1-5 responses for Layer 6 suggestions
+      const enhancedContext = { 
+        layer, 
+        context,
+        instruction: layer === 6 ? 
+          "Based on the user's responses from layers 1-5, provide 2-3 specific, actionable suggestions that explain, instruct, and provide answers for this question. Make each suggestion detailed and personalized based on their assessment responses." : 
+          "Provide helpful suggestions for this question."
+      };
+      
+      const response = await callAI('suggest', question, enhancedContext);
       if (response) {
         setAiSuggestions(prev => ({ ...prev, [question]: response }));
         return response;
       }
     } catch (error) {
+      // For Layer 6, fall back to predetermined suggestions if AI fails
+      if (layer === 6) {
+        const predeterminedSuggestions = PREDETERMINED_SUGGESTIONS[question];
+        if (predeterminedSuggestions) {
+          setSuggestions(prev => ({ ...prev, [question]: predeterminedSuggestions }));
+          return predeterminedSuggestions;
+        }
+      }
+      
       toast({
         title: "Error",
         description: "Failed to get AI suggestions. Please try again.",

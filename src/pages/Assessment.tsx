@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
@@ -40,7 +41,6 @@ const getLayerData = (layer: LayerKey) => {
 const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
   if (layer !== 6) return false;
   
-  // Improved: Use a regex pattern for more flexible matching of open-ended questions
   const openEndedPatterns = [
     /\(open-ended\)$/i,
     /^How would you/i,
@@ -55,10 +55,16 @@ const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
   return openEndedPatterns.some(pattern => pattern.test(question));
 };
 
+// Function to check if a question is multi-input (3 career interests)
+const isMultiInputQuestion = (question: string) => {
+  return question.includes("(multi-input)");
+};
+
 type ResponseValue = 
   | { label: string; value: number }
   | { text: string }
-  | { label: string; value: number; customText: string };
+  | { label: string; value: number; customText: string }
+  | { career1?: string; career2?: string; career3?: string };
 
 const Assessment = () => {
   const { user, loading } = useAuth();
@@ -208,7 +214,8 @@ const Assessment = () => {
         <div className="space-y-8">
           {Object.entries(layerData).map(([category, questions], catIdx) => {
             const isCareerClustering = category === "Career_Clustering" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
-            const actualQuestions = isCareerClustering ? (questions as any).questions : questions as string[];
+            const isPassionPracticality = category === "Passion_Practicality" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
+            const actualQuestions = (isCareerClustering || isPassionPracticality) ? (questions as any).questions : questions as string[];
 
             return (
               <Card key={category} className="animate-fade-in hover-scale border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm" style={{ animationDelay: `${catIdx * 100}ms` }}>
@@ -217,7 +224,7 @@ const Assessment = () => {
                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent" />
                     {category.replace(/_/g, ' ')}
                   </CardTitle>
-                  {isCareerClustering && (
+                  {(isCareerClustering || isPassionPracticality) && (
                     <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                       {(questions as any).instructions}
                     </p>
@@ -227,6 +234,7 @@ const Assessment = () => {
                   {actualQuestions.map((q, idx) => {
                     const isOtherOption = q.startsWith("Other (");
                     const showSuggestButton = isOpenEndedQuestion(layer, q) || isCareerClustering;
+                    const isMultiInput = isMultiInputQuestion(q);
 
                     return (
                       <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
@@ -266,7 +274,7 @@ const Assessment = () => {
                            </div>
                         </div>
 
-                        {layer <= 5 || !isCareerClustering ? (
+                        {layer <= 5 || (!isCareerClustering && !isPassionPracticality) ? (
                           layer <= 5 ? (
                             <div className="space-y-3">
                               <RadioGroup
@@ -281,6 +289,53 @@ const Assessment = () => {
                                   </div>
                                 ))}
                               </RadioGroup>
+                            </div>
+                          ) : isMultiInput ? (
+                            <div className="space-y-4">
+                              <p className="text-sm text-muted-foreground mb-4">
+                                List your top 3 career interest areas below:
+                              </p>
+                              <div className="grid gap-4">
+                                <div className="space-y-2">
+                                  <Label htmlFor={`${q}-career1`} className="text-sm font-medium">Career Interest 1</Label>
+                                  <Input
+                                    id={`${q}-career1`}
+                                    placeholder="Enter your first career interest..."
+                                    value={responses[q] && 'career1' in responses[q] ? (responses[q] as { career1: string }).career1 : ""}
+                                    onChange={(e) => {
+                                      const current = responses[q] as { career1?: string; career2?: string; career3?: string } || {};
+                                      saveResponse(q, { career1: e.target.value, career2: current.career2 || "", career3: current.career3 || "" });
+                                    }}
+                                    className="border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`${q}-career2`} className="text-sm font-medium">Career Interest 2</Label>
+                                  <Input
+                                    id={`${q}-career2`}
+                                    placeholder="Enter your second career interest..."
+                                    value={responses[q] && 'career2' in responses[q] ? (responses[q] as { career2: string }).career2 : ""}
+                                    onChange={(e) => {
+                                      const current = responses[q] as { career1?: string; career2?: string; career3?: string } || {};
+                                      saveResponse(q, { career1: current.career1 || "", career2: e.target.value, career3: current.career3 || "" });
+                                    }}
+                                    className="border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                                  />
+                                </div>
+                                <div className="space-y-2">
+                                  <Label htmlFor={`${q}-career3`} className="text-sm font-medium">Career Interest 3</Label>
+                                  <Input
+                                    id={`${q}-career3`}
+                                    placeholder="Enter your third career interest..."
+                                    value={responses[q] && 'career3' in responses[q] ? (responses[q] as { career3: string }).career3 : ""}
+                                    onChange={(e) => {
+                                      const current = responses[q] as { career1?: string; career2?: string; career3?: string } || {};
+                                      saveResponse(q, { career1: current.career1 || "", career2: current.career2 || "", career3: e.target.value });
+                                    }}
+                                    className="border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                                  />
+                                </div>
+                              </div>
                             </div>
                           ) : (
                             <div className="space-y-3">
