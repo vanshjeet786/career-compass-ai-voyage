@@ -18,7 +18,7 @@ export const PREDETERMINED_SUGGESTIONS: Record<string, string[]> = {
     "Explore forensic analysis, fraud detection, or investigative roles that require identifying unusual patterns"
   ],
   
-  "I have a strong vocabulary and use words precisely": [
+  "I enjoy writing essays, stories, or journal entries for fun.": [
     "Consider careers in technical writing, grant writing, or content strategy where precise language is essential",
     "Explore legal fields like contract law, legal research, or paralegal work that require linguistic precision",
     "Look into editing, proofreading, or translation services where word choice and accuracy are critical"
