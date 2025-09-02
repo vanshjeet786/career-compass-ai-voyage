@@ -249,10 +249,15 @@ const Assessment = () => {
                              <Button 
                                variant="outline" 
                                size="sm" 
-                               onClick={() => handleExplanation(q)} 
+                               onClick={() => handleExplanation(q)}
+                               disabled={explanationLoading}
                                className="hover:bg-primary/10 hover:border-primary/20 transition-colors duration-200"
                              >
-                               <HelpCircle className="h-4 w-4 mr-1" />
+                               {explanationLoading ? (
+                                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                               ) : (
+                                 <HelpCircle className="h-4 w-4 mr-1" />
+                               )}
                                Explain
                              </Button>
                              {showSuggestButton && (
@@ -260,10 +265,10 @@ const Assessment = () => {
                                variant="outline" 
                                size="sm" 
                                onClick={() => handleSuggestions(q)} 
-                               disabled={suggestionLoading}
+                               disabled={suggestionLoading === q}
                                className="hover:bg-accent/10 hover:border-accent/20 transition-colors duration-200"
                              >
-                               {suggestionLoading ? (
+                               {suggestionLoading === q ? (
                                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
                                ) : (
                                  <Lightbulb className="h-4 w-4 mr-1" />
@@ -422,10 +427,10 @@ const Assessment = () => {
                                       variant="ghost" 
                                       size="sm"
                                       onClick={() => handleAISuggestions(q)}
-                                      disabled={suggestionLoading}
+                                      disabled={suggestionLoading === q}
                                       className="text-accent hover:text-accent/80 p-0 h-auto font-medium mt-3"
                                     >
-                                      {suggestionLoading ? (
+                                      {suggestionLoading === q ? (
                                         <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Getting AI suggestions...</>
                                       ) : (
                                         <><Plus className="h-3 w-3 mr-1" /> Get AI Suggestions</>
