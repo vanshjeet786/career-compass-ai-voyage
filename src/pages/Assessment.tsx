@@ -4,7 +4,7 @@ import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { Loader2, ArrowRight, ArrowLeft } from "lucide-react";
 import { QuestionCard } from "../components/Assessment/QuestionCard";
 import {
@@ -234,3 +234,5 @@ const Assessment = () => {
 };
 
 export default Assessment;
+
+
