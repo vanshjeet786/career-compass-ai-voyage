@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 export function useSmartSuggestions() {
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({});
-  const { callAI, loading, setLoading } = useOptimizedAI();
+  const { callAI, loading } = useOptimizedAI();
   const { toast } = useToast();
   const [suggestionLoading, setSuggestionLoading] = useState<string | null>(null);
 

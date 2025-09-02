@@ -251,14 +251,16 @@ const Assessment = () => {
                                size="sm" 
                                onClick={() => handleExplanation(q)}
                                disabled={explanationLoading}
-                               className="hover:bg-primary/10 hover:border-primary/20 transition-colors duration-200"
+                               className="group relative overflow-hidden bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-indigo-500/10 border-purple-300/20 hover:border-purple-400/40 text-purple-700 dark:text-purple-300 transition-all duration-300 hover:shadow-lg hover:shadow-purple-500/25 hover:scale-105"
                              >
+                               <div className="absolute inset-0 bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-indigo-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700"></div>
                                {explanationLoading ? (
-                                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                 <Loader2 className="h-4 w-4 mr-1 animate-spin relative z-10" />
                                ) : (
-                                 <HelpCircle className="h-4 w-4 mr-1" />
+                                 <HelpCircle className="h-4 w-4 mr-1 relative z-10 group-hover:rotate-12 transition-transform duration-300" />
                                )}
-                               Explain
+                               <span className="relative z-10 font-medium">Explain</span>
                              </Button>
                              {showSuggestButton && (
                              <Button 
