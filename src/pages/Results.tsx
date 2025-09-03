@@ -9,7 +9,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { Loader2, Download, Send } from "lucide-react";
+import { Loader2, Download, Send, Briefcase, DollarSign, ExternalLink } from "lucide-react";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -23,12 +23,22 @@ interface RespRow {
   layer_number: number;
 }
 
+interface CareerRecommendation {
+  rank: number;
+  title: string;
+  explanation: string;
+  salary: string;
+  onetLink: string;
+}
+
 const Results = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
   const q = useQuery();
   const assessId = q.get("assess");
   const [rows, setRows] = useState<RespRow[]>([]);
+  const [recommendations, setRecommendations] = useState<CareerRecommendation[]>([]);
+  const [recsLoading, setRecsLoading] = useState(true);
   const [chatInput, setChatInput] = useState("");
   const [chat, setChat] = useState<{ from: "user" | "ai"; text: string }[]>([]);
   const [generating, setGenerating] = useState(false);
@@ -72,6 +82,41 @@ const Results = () => {
       }
     })();
   }, [assessId, toast]);
+
+  useEffect(() => {
+    if (rows.length === 0) return;
+
+    const getRecommendations = async () => {
+      setRecsLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("gemini-assist", {
+          body: {
+            mode: 'recommendations',
+            context: {
+              assessId,
+              responses: rows,
+            }
+          },
+        });
+
+        if (error || data.error) {
+          throw new Error(error?.message || data.error);
+        }
+
+        setRecommendations(data.recommendations || []);
+      } catch (error: any) {
+        toast({
+          title: "Failed to get AI career recommendations.",
+          description: error.message,
+          variant: "destructive",
+        });
+      } finally {
+        setRecsLoading(false);
+      }
+    };
+
+    getRecommendations();
+  }, [rows, assessId, toast]);
 
   const catAverages = useMemo(() => {
     const map: Record<string, { sum: number; count: number }> = {};
@@ -256,46 +301,44 @@ const Results = () => {
             <Card className="xl:col-span-2 animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '300ms' }}>
               <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
                 <CardTitle className="text-2xl flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
-                  Recommendations & Insights
+                  <Briefcase className="h-6 w-6 text-primary" />
+                  Top 5 Career Recommendations
                 </CardTitle>
               </CardHeader>
-              <CardContent className="p-8">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg text-primary">Top Strengths</h3>
-                    <div className="space-y-3">
-                      {catAverages.sort((a, b) => b.score - a.score).slice(0, 3).map((cat, idx) => (
-                        <div key={cat.name} className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-primary-foreground text-sm font-bold">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium">{cat.name}</p>
-                            <p className="text-sm text-muted-foreground">Score: {cat.score}/5</p>
-                          </div>
-                        </div>
-                      ))}
+              <CardContent className="p-6 space-y-4">
+                {recsLoading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <div key={i} className="p-4 rounded-lg border border-border/50 bg-background/50 space-y-3">
+                      <div className="h-6 bg-muted rounded w-3/4 animate-pulse"></div>
+                      <div className="h-4 bg-muted rounded w-full animate-pulse" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="h-4 bg-muted rounded w-5/6 animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="h-4 bg-muted rounded w-1/2 animate-pulse" style={{ animationDelay: '0.3s' }}></div>
                     </div>
-                  </div>
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg text-accent">Action Items</h3>
-                    <ul className="space-y-3">
-                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
-                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
-                        <span className="text-sm">Focus on top-scoring categories for skill development</span>
-                      </li>
-                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
-                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
-                        <span className="text-sm">Align projects with your highest strengths</span>
-                      </li>
-                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
-                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
-                        <span className="text-sm">Validate career choices through micro-experiments</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
+                  ))
+                ) : (
+                  recommendations.map((rec) => (
+                    <div key={rec.rank} className="p-4 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200">
+                      <h3 className="font-bold text-lg text-primary flex items-center gap-3">
+                        <span className="text-2xl font-black text-primary/50">{rec.rank}</span>
+                        {rec.title}
+                      </h3>
+                      <p className="text-muted-foreground mt-2 mb-3 text-sm">{rec.explanation}</p>
+                      <div className="flex items-center gap-6 text-sm">
+                        <div className="flex items-center gap-2">
+                          <DollarSign className="h-4 w-4 text-accent" />
+                          <span className="font-medium">{rec.salary}</span>
+                        </div>
+                        <a href={rec.onetLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-accent hover:underline">
+                          <ExternalLink className="h-4 w-4" />
+                          O*NET Details
+                        </a>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <p className="text-xs text-muted-foreground text-center mt-4">
+                  Disclaimer: Career recommendations, salary ranges, and O*NET links are generated by AI and should be independently verified.
+                </p>
               </CardContent>
             </Card>
             

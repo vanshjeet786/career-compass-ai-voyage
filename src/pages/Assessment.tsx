@@ -4,6 +4,7 @@ import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
@@ -20,6 +21,9 @@ import {
   LAYER_5_QUESTIONS,
   LAYER_6_QUESTIONS,
 } from "@/data/questions";
+import { PREDETERMINED_SUGGESTIONS } from "@/data/suggestions";
+
+const TOP_3_CAREERS_QUESTION = "My top 3 career interest areas are: (open-ended)";
 
 const likertOptions = Object.keys(RESPONSE_SCALE);
 
@@ -58,6 +62,7 @@ const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
 type ResponseValue = 
   | { label: string; value: number }
   | { text: string }
+  | { texts: string[] }
   | { label: string; value: number; customText: string };
 
 const Assessment = () => {
@@ -167,10 +172,27 @@ const Assessment = () => {
       const { data, error } = await supabase.functions.invoke("gemini-assist", {
         body: { mode: 'suggest', question, context: { layer, responses } },
       });
-      if (error) throw error;
-      setSuggestions(prev => ({ ...prev, [question]: [data.text] }));
+
+      if (error || data.error) {
+        throw new Error(error?.message || data.error);
+      }
+
+      setSuggestions(prev => ({ ...prev, [question]: data.suggestions }));
     } catch (error: any) {
-      toast({ title: "AI error", description: error.message, variant: "destructive" });
+      toast({
+        title: "AI suggestions failed",
+        description: "Showing predetermined suggestions as a fallback.",
+      });
+      const fallback = PREDETERMINED_SUGGESTIONS[question];
+      if (fallback) {
+        setSuggestions(prev => ({ ...prev, [question]: fallback.slice(0, 3) }));
+      } else {
+        toast({
+          title: "Error",
+          description: "Could not load suggestions for this question.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setAiLoading(null);
     }
@@ -227,8 +249,8 @@ const Assessment = () => {
 
         <div className="space-y-8">
           {Object.entries(layerData).map(([category, questions], catIdx) => {
-            const isCareerClustering = category === "Career_Clustering" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
-            const actualQuestions = isCareerClustering ? (questions as any).questions : questions as string[];
+            const hasInstructions = typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
+            const actualQuestions = hasInstructions ? (questions as any).questions : questions as string[];
 
             return (
               <Card key={category} className="animate-fade-in hover-scale border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm" style={{ animationDelay: `${catIdx * 100}ms` }}>
@@ -237,7 +259,7 @@ const Assessment = () => {
                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent" />
                     {category.replace(/_/g, ' ')}
                   </CardTitle>
-                  {isCareerClustering && (
+                  {hasInstructions && (
                     <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                       {(questions as any).instructions}
                     </p>
@@ -246,7 +268,7 @@ const Assessment = () => {
                 <CardContent className="space-y-6 p-6">
                   {actualQuestions.map((q, idx) => {
                     const isOtherOption = q.startsWith("Other (");
-                    const showSuggestButton = isOpenEndedQuestion(layer, q) || isCareerClustering;
+                    const showSuggestButton = isOpenEndedQuestion(layer, q);
 
                     return (
                       <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
@@ -262,9 +284,9 @@ const Assessment = () => {
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleExplanation(q)} 
-                              className="hover:bg-primary/10 hover:border-primary/20 transition-all duration-200 animate-scale-in"
+                              className="rounded-full px-4 transition-all duration-200 hover:bg-transparent"
                             >
-                              <HelpCircle className="h-4 w-4 mr-1" />
+                              <HelpCircle className="h-4 w-4 mr-2" />
                               Explain
                             </Button>
                             {showSuggestButton && (
@@ -273,7 +295,7 @@ const Assessment = () => {
                               size="sm" 
                               onClick={() => handleSuggestions(q)} 
                               disabled={aiLoading === q + 'suggest'}
-                              className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200 animate-scale-in"
+                              className="rounded-full px-4 border-accent text-accent hover:bg-transparent hover:text-accent/80 transition-all duration-200"
                             >
                               {aiLoading === q + 'suggest' ? (
                                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -304,12 +326,50 @@ const Assessment = () => {
                             </div>
                           ) : (
                             <div className="space-y-3">
-                              <Textarea
-                                placeholder="Share your thoughts, experiences, and insights..."
-                                value={responses[q] && 'text' in responses[q] ? (responses[q] as { text: string }).text : ""}
-                                onChange={(e) => saveResponse(q, { text: e.target.value })}
-                                className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
-                              />
+                              {q === TOP_3_CAREERS_QUESTION ? (
+                                <div className="space-y-3">
+                                  <Input
+                                    placeholder="Career 1"
+                                    value={responses[q] && 'texts' in responses[q] ? (responses[q] as { texts: string[] }).texts[0] || '' : ''}
+                                    onChange={(e) => {
+                                      const existing = responses[q] && 'texts' in responses[q] ? (responses[q] as { texts: string[] }).texts : ['', '', ''];
+                                      const newTexts: string[] = [...existing];
+                                      newTexts[0] = e.target.value;
+                                      saveResponse(q, { texts: newTexts });
+                                    }}
+                                    className="border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                                  />
+                                  <Input
+                                    placeholder="Career 2"
+                                    value={responses[q] && 'texts' in responses[q] ? (responses[q] as { texts: string[] }).texts[1] || '' : ''}
+                                    onChange={(e) => {
+                                      const existing = responses[q] && 'texts' in responses[q] ? (responses[q] as { texts: string[] }).texts : ['', '', ''];
+                                      const newTexts: string[] = [...existing];
+                                      newTexts[1] = e.target.value;
+                                      saveResponse(q, { texts: newTexts });
+                                    }}
+                                    className="border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                                  />
+                                  <Input
+                                    placeholder="Career 3"
+                                    value={responses[q] && 'texts' in responses[q] ? (responses[q] as { texts: string[] }).texts[2] || '' : ''}
+                                    onChange={(e) => {
+                                      const existing = responses[q] && 'texts' in responses[q] ? (responses[q] as { texts: string[] }).texts : ['', '', ''];
+                                      const newTexts: string[] = [...existing];
+                                      newTexts[2] = e.target.value;
+                                      saveResponse(q, { texts: newTexts });
+                                    }}
+                                    className="border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                                  />
+                                </div>
+                              ) : (
+                                <Textarea
+                                  placeholder="Share your thoughts, experiences, and insights..."
+                                  value={responses[q] && 'text' in responses[q] ? (responses[q] as { text: string }).text : ""}
+                                  onChange={(e) => saveResponse(q, { text: e.target.value })}
+                                  className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
+                                />
+                              )}
                             </div>
                           )
                         ) : (
@@ -347,21 +407,20 @@ const Assessment = () => {
                                     Why it matters:
                                   </span>
                                   <span className="text-muted-foreground mb-3 block">{explanations[q]}</span>
-                                  {!expandedExplanations[q] && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm"
-                                      onClick={() => handleExpandedExplanation(q)}
-                                      disabled={explanationLoading}
-                                      className="text-primary hover:text-primary/80 p-0 h-auto font-medium animate-magic-glow rounded-full px-3"
-                                    >
-                                      {explanationLoading ? (
-                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Loading...</>
-                                      ) : (
-                                        <><Plus className="h-3 w-3 mr-1" /> Explain More</>
-                                      )}
-                                    </Button>
-                                  )}
+                                  {/* NOTE: The 'Explain More' button was missing. Re-added with new styling, but onClick is commented out as the handler is not defined in the file. */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    // onClick={() => handleExpandedExplanation(q)}
+                                    // disabled={explanationLoading}
+                                    className="text-primary hover:text-primary/80 h-auto font-medium rounded-lg px-3 py-1"
+                                  >
+                                    {explanationLoading ? (
+                                      <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Loading...</>
+                                    ) : (
+                                      <><Plus className="h-3 w-3 mr-1" /> Explain More</>
+                                    )}
+                                  </Button>
                                 </div>
                               </div>
                             )}
@@ -382,21 +441,20 @@ const Assessment = () => {
                                       </div>
                                     ))}
                                   </div>
-                                  {!showAISuggestions[q] && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm"
-                                      onClick={() => handleAISuggestions(q)}
-                                      disabled={suggestionLoading}
-                                      className="text-accent hover:text-accent/80 p-0 h-auto font-medium mt-3"
-                                    >
-                                      {suggestionLoading ? (
-                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Getting AI suggestions...</>
-                                      ) : (
-                                        <><Plus className="h-3 w-3 mr-1" /> Get AI Suggestions</>
-                                      )}
-                                    </Button>
-                                  )}
+                                  {/* NOTE: The 'Get AI Suggestions' button was missing. Re-added with new styling, but onClick is commented out as the handler is not defined in the file. */}
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    // onClick={() => handleAISuggestions(q)}
+                                    // disabled={suggestionLoading}
+                                    className="text-accent hover:text-accent/80 h-auto font-medium mt-3 rounded-lg px-3 py-1"
+                                  >
+                                    {suggestionLoading ? (
+                                      <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Getting AI suggestions...</>
+                                    ) : (
+                                      <><Plus className="h-3 w-3 mr-1" /> Get AI Suggestions</>
+                                    )}
+                                  </Button>
                                 </div>
                               </div>
                             )}

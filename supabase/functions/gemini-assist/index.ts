@@ -94,11 +94,13 @@ serve(async (req) => {
     if (mode === "explain" && question) {
       finalPrompt += `Explain why this question matters in career counseling and what a good answer considers. Question: "${question}". Keep it to 60-90 words.`;
     } else if (mode === "suggest" && question) {
-      finalPrompt += `Provide three distinct, personalized suggestions (80-100 words each) for answering this open-ended question. Use the user's context if provided. Number the suggestions 1-3. Question: "${question}". ${contextSummary}Personalize the suggestions based on their identified strengths, personality traits, and interests. Focus on practical, actionable ideas that align with their profile.`;
+      finalPrompt += `Your response must be a valid JSON object in the format: { "suggestions": ["suggestion 1", "suggestion 2", "suggestion 3"] }. Provide three distinct, personalized, and instructive suggestions for answering the following open-ended question. Each suggestion should be 80-100 words. Base your suggestions on the user's context provided below. Question: "${question}". Context: ${contextSummary}`;
     } else if (mode === "chat" && prompt) {
       finalPrompt += `Respond as a counselor. Be specific and actionable in 2-4 short paragraphs. User: ${prompt}. Context: ${JSON.stringify(
         context || {}
       )}.`;
+    } else if (mode === 'recommendations' && context) {
+      finalPrompt += `You are Career Compass, an expert career counselor. Based on the user's comprehensive assessment results provided in the context, generate a ranked list of the top 5 most suitable career paths for them. Your response MUST be a valid JSON object in the format: { "recommendations": [ { "rank": 1, "title": "Career Title", "explanation": "Why this career is a good fit...", "salary": "$80,000 - $120,000 USD", "onetLink": "https://www.onetonline.org/link/to/summary/..." }, ... ] }. Provide a concise explanation for each ranking, an estimated annual salary range in USD, and a plausible O*NET OnLine link for a relevant occupation. The user's assessment context is: ${JSON.stringify(context)}`;
     } else {
       throw new Error("Invalid parameters");
     }
@@ -133,9 +135,28 @@ serve(async (req) => {
     }
 
     const data = await geminiRes.json();
-    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "No response generated.";
 
-    return new Response(JSON.stringify({ text }), {
+    if (mode === 'suggest' || mode === 'recommendations') {
+      // The output from Gemini might be wrapped in ```json ... ```, so we need to extract it.
+      const jsonMatch = rawText.match(/```json([\s\S]*)```/);
+      const jsonString = jsonMatch ? jsonMatch[1].trim() : rawText;
+      try {
+        const parsed = JSON.parse(jsonString);
+        return new Response(JSON.stringify(parsed), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (e) {
+        console.error("Failed to parse JSON from Gemini response:", jsonString);
+        // Fallback to a structured error to be handled by the client
+        return new Response(JSON.stringify({ error: "Invalid JSON response from AI." }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    return new Response(JSON.stringify({ text: rawText }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {
