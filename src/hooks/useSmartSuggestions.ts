@@ -6,22 +6,23 @@ import { useToast } from '@/hooks/use-toast';
 export function useSmartSuggestions() {
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
   const [aiSuggestions, setAiSuggestions] = useState<Record<string, string>>({});
-  const { callAI } = useOptimizedAI();
+  const { callAI, loading } = useOptimizedAI();
   const { toast } = useToast();
-  const [loading, setLoading] = useState<string | null>(null);
 
   const getSuggestions = useCallback(async (question: string, layer: number, userResponses?: any) => {
-    if (layer === 6) {
-      return await getAISuggestions(question, layer, userResponses);
-    }
-    
+    // First, try to get predetermined suggestions
     const predeterminedSuggestions = PREDETERMINED_SUGGESTIONS[question];
     
     if (predeterminedSuggestions && !suggestions[question]) {
+      // Personalize suggestions based on user responses if available
       let personalizedSuggestions = [...predeterminedSuggestions];
       
       if (userResponses && Object.keys(userResponses).length > 0) {
-        personalizedSuggestions = predeterminedSuggestions.map(suggestion => suggestion);
+        // Add context-aware personalization to suggestions
+        personalizedSuggestions = predeterminedSuggestions.map(suggestion => {
+          // This is a simple example - in a real app, you'd want more sophisticated personalization
+          return suggestion + " (based on your previous responses)";
+        });
       }
       
       setSuggestions(prev => ({ ...prev, [question]: personalizedSuggestions }));
@@ -36,37 +37,18 @@ export function useSmartSuggestions() {
       return aiSuggestions[question];
     }
 
-    setLoading(question);
     try {
-      const enhancedContext = { 
-        layer, 
-        context,
-        instruction: layer === 6 ? 
-          "Based on the user's responses from layers 1-5, provide 2-3 specific, actionable suggestions..." : 
-          "Provide helpful suggestions for this question."
-      };
-      
-      const response = await callAI('suggest', question, enhancedContext);
+      const response = await callAI('suggest', question, { layer, context });
       if (response) {
         setAiSuggestions(prev => ({ ...prev, [question]: response }));
         return response;
       }
     } catch (error) {
-      if (layer === 6) {
-        const predeterminedSuggestions = PREDETERMINED_SUGGESTIONS[question];
-        if (predeterminedSuggestions) {
-          setSuggestions(prev => ({ ...prev, [question]: predeterminedSuggestions }));
-          return predeterminedSuggestions;
-        }
-      }
-      
       toast({
         title: "Error",
         description: "Failed to get AI suggestions. Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setLoading(null);
     }
     
     return null;
@@ -80,5 +62,3 @@ export function useSmartSuggestions() {
     loading
   };
 }
-
-

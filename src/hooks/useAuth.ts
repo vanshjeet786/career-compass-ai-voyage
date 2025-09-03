@@ -1,32 +1,31 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import type { User } from "@supabase/supabase-js";
 
-export const useAuth = () => {
+export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+      console.log("Auth state change:", event, s?.user?.email);
+      setSession(s);
+      setUser(s?.user ?? null);
+      setLoading(false);
+    });
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log("Initial session:", session?.user?.email);
+      setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    const { data: authListener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
-      },
-    );
-
     return () => {
-      authListener.subscription.unsubscribe();
+      subscription.unsubscribe();
     };
   }, []);
 
-  const signOut = async () => {
-    await supabase.auth.signOut();
-  };
-
-  return { user, loading, signOut };
-};
+  return { user, session, loading };
+}

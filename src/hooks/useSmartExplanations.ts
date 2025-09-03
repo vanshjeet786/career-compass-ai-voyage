@@ -6,11 +6,11 @@ import { useToast } from '@/hooks/use-toast';
 export function useSmartExplanations() {
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [expandedExplanations, setExpandedExplanations] = useState<Record<string, string>>({});
-  const { callAI } = useOptimizedAI();
+  const { callAI, loading } = useOptimizedAI();
   const { toast } = useToast();
-  const [loading, setLoading] = useState<string | null>(null);
 
   const getExplanation = useCallback(async (question: string, layer: number) => {
+    // First, try to get predetermined explanation
     const predeterminedExplanation = PREDETERMINED_EXPLANATIONS[question];
     
     if (predeterminedExplanation && !explanations[question]) {
@@ -25,8 +25,7 @@ export function useSmartExplanations() {
     if (expandedExplanations[question]) {
       return expandedExplanations[question];
     }
-    
-    setLoading(question);
+
     try {
       const response = await callAI('explain', question, { layer, context });
       if (response) {
@@ -39,8 +38,6 @@ export function useSmartExplanations() {
         description: "Failed to get expanded explanation. Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setLoading(null);
     }
     
     return null;
@@ -54,5 +51,3 @@ export function useSmartExplanations() {
     loading
   };
 }
-
-

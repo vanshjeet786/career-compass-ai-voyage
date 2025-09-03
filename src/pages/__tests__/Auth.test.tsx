@@ -1,45 +1,45 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BrowserRouter } from 'react-router-dom'
 import Auth from '../Auth'
 import { supabase } from '@/integrations/supabase/client'
 
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+// Helper to get screen queries
+const screen = {
+  getByRole: (role: string, options?: any) => document.querySelector(`[role="${role}"]${options?.name ? `[aria-label*="${options.name}"]` : ''}`) as HTMLElement,
+  getByPlaceholderText: (text: RegExp | string) => document.querySelector(`[placeholder*="${typeof text === 'string' ? text : text.source}"]`) as HTMLElement,
+  getByText: (text: RegExp | string) => document.querySelector(`*:contains("${typeof text === 'string' ? text : text.source}")`) as HTMLElement,
+}
 
-const queryClient = new QueryClient();
+const renderAuth = () => {
+  return render(
+    <BrowserRouter>
+      <Auth />
+    </BrowserRouter>
+  )
+}
 
 describe('Auth Page', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    render(
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <BrowserRouter>
-            <Auth />
-          </BrowserRouter>
-        </TooltipProvider>
-      </QueryClientProvider>
-    )
   })
 
   it('should render login form by default', () => {
-    expect(screen.getByRole('heading', { name: /career compass/i })).toBeInTheDocument()
-    expect(screen.getByText(/log in to continue your assessment/i)).toBeInTheDocument()
-    expect(screen.getByPlaceholderText(/you@example.com/i)).toBeInTheDocument()
-    expect(screen.getByPlaceholderText(/••••••••/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /log in/i })).toBeInTheDocument()
+    renderAuth()
+    
+    expect(screen.getByRole('heading', { name: /welcome back/i })).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/email/i)).toBeInTheDocument()
+    expect(screen.getByPlaceholderText(/password/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
   })
 
   it('should switch to signup mode', async () => {
-    await userEvent.click(screen.getByText(/sign up/i))
+    renderAuth()
     
-    expect(screen.getByText(/create an account to start your journey/i)).toBeInTheDocument()
+    await userEvent.click(screen.getByText(/create an account/i))
+    
+    expect(screen.getByRole('heading', { name: /create account/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /sign up/i })).toBeInTheDocument()
   })
 
@@ -48,10 +48,12 @@ describe('Auth Page', () => {
       data: { user: { id: '123' } as any, session: null },
       error: null,
     })
+
+    renderAuth()
     
-    await userEvent.type(screen.getByPlaceholderText(/you@example.com/i), 'test@example.com')
-    await userEvent.type(screen.getByPlaceholderText(/••••••••/i), 'password123')
-    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+    await userEvent.type(screen.getByPlaceholderText(/email/i), 'test@example.com')
+    await userEvent.type(screen.getByPlaceholderText(/password/i), 'password123')
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     // Wait for async operations
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -67,8 +69,10 @@ describe('Auth Page', () => {
       data: { provider: 'google', url: 'https://oauth.url' },
       error: null,
     })
+
+    renderAuth()
     
-    await userEvent.click(screen.getByRole('button', { name: /google/i }))
+    await userEvent.click(screen.getByRole('button', { name: /continue with google/i }))
 
     // Wait for async operations
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -76,7 +80,7 @@ describe('Auth Page', () => {
     expect(supabase.auth.signInWithOAuth).toHaveBeenCalledWith({
       provider: 'google',
       options: {
-        redirectTo: expect.stringContaining('/'),
+        redirectTo: expect.stringContaining('/assess'),
       },
     })
   })
@@ -86,14 +90,16 @@ describe('Auth Page', () => {
       data: { user: null, session: null },
       error: { message: 'Invalid credentials' } as any,
     })
+
+    renderAuth()
     
-    await userEvent.type(screen.getByPlaceholderText(/you@example.com/i), 'test@example.com')
-    await userEvent.type(screen.getByPlaceholderText(/••••••••/i), 'wrongpassword')
-    await userEvent.click(screen.getByRole('button', { name: /log in/i }))
+    await userEvent.type(screen.getByPlaceholderText(/email/i), 'test@example.com')
+    await userEvent.type(screen.getByPlaceholderText(/password/i), 'wrongpassword')
+    await userEvent.click(screen.getByRole('button', { name: /sign in/i }))
 
     // Wait for error to appear
     await new Promise(resolve => setTimeout(resolve, 200))
 
-    expect(await screen.findByText(/invalid credentials/i)).toBeInTheDocument()
+    expect(screen.getByText(/invalid credentials/i)).toBeInTheDocument()
   })
 })

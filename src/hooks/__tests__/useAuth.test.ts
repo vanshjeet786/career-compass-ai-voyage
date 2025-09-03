@@ -9,6 +9,7 @@ describe('useAuth', () => {
     
     expect(result.current.loading).toBe(true)
     expect(result.current.user).toBe(null)
+    expect(result.current.session).toBe(null)
   })
 
   it('should handle auth state changes', async () => {
@@ -26,6 +27,7 @@ describe('useAuth', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
 
     expect(result.current.user).toEqual(mockUser)
+    expect(result.current.session).toEqual(mockSession)
   })
 
   it('should handle auth errors', async () => {
@@ -42,5 +44,6 @@ describe('useAuth', () => {
     await new Promise(resolve => setTimeout(resolve, 100))
 
     expect(result.current.user).toBe(null)
+    expect(result.current.session).toBe(null)
   })
 })

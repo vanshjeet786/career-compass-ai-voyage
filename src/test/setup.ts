@@ -1,20 +1,6 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
-Object.defineProperty(window, 'matchMedia', {
-  writable: true,
-  value: vi.fn().mockImplementation(query => ({
-    matches: false,
-    media: query,
-    onchange: null,
-    addListener: vi.fn(), // deprecated
-    removeListener: vi.fn(), // deprecated
-    addEventListener: vi.fn(),
-    removeEventListener: vi.fn(),
-    dispatchEvent: vi.fn(),
-  })),
-})
-
 // Mock Supabase client
 vi.mock('@/integrations/supabase/client', () => ({
   supabase: {
@@ -49,7 +35,7 @@ vi.mock('react-router-dom', () => ({
   BrowserRouter: ({ children }: any) => children,
   Routes: ({ children }: any) => children,
   Route: ({ element }: any) => element,
-  Link: ({ children, to }: any) => <a href={to}>{children}</a>,
+  Link: ({ children, to }: any) => ({ children, href: to }),
 }))
 
 // Mock html2canvas and jsPDF for PDF export tests
