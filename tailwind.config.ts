@@ -160,7 +160,15 @@ export default {
 					'50%': {
 						transform: 'translateY(-10px)'
 					}
-				}
+				},
+        'magic-glow': {
+          '0%, 100%': {
+            boxShadow: '0 0 4px hsl(var(--primary) / 0.5)',
+          },
+          '50%': {
+            boxShadow: '0 0 16px hsl(var(--primary) / 0.5)',
+          },
+        },
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
@@ -171,7 +179,8 @@ export default {
 				'slide-in-left': 'slide-in-left 0.4s ease-out',
 				'bounce-in': 'bounce-in 0.6s ease-out',
 				'gradient-x': 'gradient-x 3s ease infinite',
-				'float': 'float 3s ease-in-out infinite'
+				'float': 'float 3s ease-in-out infinite',
+        'magic-glow': 'magic-glow 2.5s ease-in-out infinite',
 			}
 		}
 	},
