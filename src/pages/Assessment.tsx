@@ -20,6 +20,7 @@ import {
   LAYER_5_QUESTIONS,
   LAYER_6_QUESTIONS,
 } from "@/data/questions";
+import { PREDETERMINED_SUGGESTIONS } from "@/data/suggestions";
 
 const likertOptions = Object.keys(RESPONSE_SCALE);
 
@@ -58,7 +59,8 @@ const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
 type ResponseValue = 
   | { label: string; value: number }
   | { text: string }
-  | { label: string; value: number; customText: string };
+  | { label: string; value: number; customText: string }
+  | { career1?: string; career2?: string; career3?: string };
 
 const Assessment = () => {
   const { user, loading } = useAuth();
@@ -160,15 +162,77 @@ const Assessment = () => {
     }
   };
 
+  const handleExpandedExplanation = async (question: string) => {
+    setExpandedExplanations(prev => ({ ...prev, [question]: true }));
+    setAiLoading(question + 'explain');
+    try {
+      const { data, error } = await supabase.functions.invoke("gemini-assist", {
+        body: { mode: 'explain', question, context: { layer, responses } },
+      });
+      if (error) throw error;
+      setExplanations(prev => ({ ...prev, [question + '_expanded']: data.text }));
+    } catch (error: any) {
+      toast({ title: "AI error", description: error.message, variant: "destructive" });
+    } finally {
+      setAiLoading(null);
+    }
+  };
+
   const handleSuggestions = async (question: string) => {
     if (suggestions[question]) return;
     setAiLoading(question + 'suggest');
+    
+    // For Layer 6, call AI first, fallback to predetermined
+    if (layer === 6) {
+      try {
+        const enhancedContext = {
+          layer,
+          userResponses: responses,
+          instruction: "Based on the user's responses from layers 1-5, provide 2-3 specific, actionable suggestions for this question."
+        };
+        
+        const { data, error } = await supabase.functions.invoke("gemini-assist", {
+          body: { mode: 'suggest', question, context: enhancedContext },
+        });
+        
+        if (error) throw error;
+        
+        // Split AI response into multiple suggestions
+        const aiSuggestions = data.text.split('\n').filter(s => s.trim()).slice(0, 3);
+        setSuggestions(prev => ({ ...prev, [question]: aiSuggestions }));
+      } catch (error: any) {
+        // Fallback to predetermined suggestions
+        const predetermined = PREDETERMINED_SUGGESTIONS[question];
+        if (predetermined) {
+          setSuggestions(prev => ({ ...prev, [question]: predetermined }));
+        } else {
+          toast({ title: "AI error", description: error.message, variant: "destructive" });
+        }
+      }
+    } else {
+      // For layers 1-5, use predetermined suggestions only
+      const predetermined = PREDETERMINED_SUGGESTIONS[question];
+      if (predetermined) {
+        setSuggestions(prev => ({ ...prev, [question]: predetermined }));
+      }
+    }
+    
+    setAiLoading(null);
+  };
+
+  const handleAISuggestions = async (question: string) => {
+    setShowAISuggestions(prev => ({ ...prev, [question]: true }));
+    setAiLoading(question + 'ai_suggest');
     try {
       const { data, error } = await supabase.functions.invoke("gemini-assist", {
         body: { mode: 'suggest', question, context: { layer, responses } },
       });
       if (error) throw error;
-      setSuggestions(prev => ({ ...prev, [question]: [data.text] }));
+      const aiSuggestions = data.text.split('\n').filter(s => s.trim()).slice(0, 3);
+      setSuggestions(prev => ({ 
+        ...prev, 
+        [question]: [...(prev[question] || []), ...aiSuggestions] 
+      }));
     } catch (error: any) {
       toast({ title: "AI error", description: error.message, variant: "destructive" });
     } finally {
@@ -237,16 +301,28 @@ const Assessment = () => {
                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent" />
                     {category.replace(/_/g, ' ')}
                   </CardTitle>
-                  {isCareerClustering && (
+                {isCareerClustering && (
                     <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
                       {(questions as any).instructions}
                     </p>
+                  )}
+                  {category === "Passion_Practicality" && (
+                    <div className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                      <p className="mb-2">
+                        <strong>Instructions:</strong> In this section, you'll evaluate your top 3 career interests from the Self-Synthesis section. 
+                        Rate each career on the following dimensions using the scale provided.
+                      </p>
+                      <p className="text-xs">
+                        <em>Note: "Career 1", "Career 2", and "Career 3" refer to the career interests you specified in the Self-Synthesis section's 6th question: "My top 3 career interest areas are".</em>
+                      </p>
+                    </div>
                   )}
                 </CardHeader>
                 <CardContent className="space-y-6 p-6">
                   {actualQuestions.map((q, idx) => {
                     const isOtherOption = q.startsWith("Other (");
                     const showSuggestButton = isOpenEndedQuestion(layer, q) || isCareerClustering;
+                    const isMultiCareerInput = q.includes("My top 3 career interest areas are:");
 
                     return (
                       <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
@@ -262,9 +338,9 @@ const Assessment = () => {
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleExplanation(q)} 
-                              className="hover:bg-primary/10 hover:border-primary/20 transition-all duration-200 animate-scale-in"
+                              className="px-4 py-2 rounded-full hover:bg-transparent hover:text-primary hover:border-primary/50 transition-all duration-200"
                             >
-                              <HelpCircle className="h-4 w-4 mr-1" />
+                              <HelpCircle className="h-4 w-4 mr-2" />
                               Explain
                             </Button>
                             {showSuggestButton && (
@@ -273,12 +349,12 @@ const Assessment = () => {
                               size="sm" 
                               onClick={() => handleSuggestions(q)} 
                               disabled={aiLoading === q + 'suggest'}
-                              className="hover:bg-accent/10 hover:border-accent/20 transition-all duration-200 animate-scale-in"
+                              className="px-4 py-2 rounded-full hover:bg-transparent hover:text-accent hover:border-accent/50 transition-all duration-200"
                             >
                               {aiLoading === q + 'suggest' ? (
-                                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                               ) : (
-                                <Lightbulb className="h-4 w-4 mr-1" />
+                                <Lightbulb className="h-4 w-4 mr-2" />
                               )}
                               Suggest
                             </Button>
@@ -302,6 +378,27 @@ const Assessment = () => {
                                 ))}
                               </RadioGroup>
                             </div>
+                          ) : isMultiCareerInput ? (
+                            <div className="space-y-4">
+                              <div className="grid gap-4">
+                                {['career1', 'career2', 'career3'].map((field, idx) => (
+                                  <div className="space-y-2" key={field}>
+                                    <Label htmlFor={`${q}-${field}`} className="text-sm font-medium">Career Interest {idx + 1}</Label>
+                                    <input
+                                      id={`${q}-${field}`}
+                                      type="text"
+                                      placeholder={`Enter career interest ${idx + 1}...`}
+                                      value={(responses[q] as any)?.[field] || ""}
+                                      onChange={(e) => {
+                                        const current = responses[q] as { career1?: string; career2?: string; career3?: string } || {};
+                                        saveResponse(q, { ...current, [field]: e.target.value });
+                                      }}
+                                      className="w-full px-3 py-2 border border-border/50 rounded-lg focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
                           ) : (
                             <div className="space-y-3">
                               <Textarea
@@ -312,6 +409,21 @@ const Assessment = () => {
                               />
                             </div>
                           )
+                        ) : ((category as string) === "Passion_Practicality") ? (
+                          <div className="space-y-3">
+                            <RadioGroup
+                              value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
+                              onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
+                              className="grid grid-cols-1 md:grid-cols-5 gap-3"
+                            >
+                              {likertOptions.map((opt) => (
+                                <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
+                                  <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
+                                  <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
+                                </div>
+                              ))}
+                            </RadioGroup>
+                          </div>
                         ) : (
                           <div className="space-y-4">
                             <RadioGroup
@@ -347,21 +459,27 @@ const Assessment = () => {
                                     Why it matters:
                                   </span>
                                   <span className="text-muted-foreground mb-3 block">{explanations[q]}</span>
-                                  {!expandedExplanations[q] && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm"
-                                      onClick={() => handleExpandedExplanation(q)}
-                                      disabled={explanationLoading}
-                                      className="text-primary hover:text-primary/80 p-0 h-auto font-medium animate-magic-glow rounded-full px-3"
-                                    >
-                                      {explanationLoading ? (
-                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Loading...</>
-                                      ) : (
-                                        <><Plus className="h-3 w-3 mr-1" /> Explain More</>
-                                      )}
-                                    </Button>
-                                  )}
+                                   {!expandedExplanations[q] && layer <= 5 && (
+                                     <Button 
+                                       variant="ghost" 
+                                       size="sm"
+                                       onClick={() => handleExpandedExplanation(q)}
+                                       disabled={aiLoading === q + 'explain'}
+                                       className="px-4 py-2 rounded-full hover:bg-transparent hover:text-primary hover:border-primary/30 transition-all duration-200 border border-transparent"
+                                     >
+                                       {aiLoading === q + 'explain' ? (
+                                         <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Loading...</>
+                                       ) : (
+                                         <><Plus className="h-3 w-3 mr-2" /> Explain More</>
+                                       )}
+                                     </Button>
+                                   )}
+                                   {explanations[q + '_expanded'] && (
+                                     <div className="mt-3 p-3 rounded-lg bg-primary/3 border border-primary/10">
+                                       <span className="font-semibold text-primary text-xs block mb-2">Detailed Explanation:</span>
+                                       <span className="text-muted-foreground text-sm">{explanations[q + '_expanded']}</span>
+                                     </div>
+                                   )}
                                 </div>
                               </div>
                             )}
@@ -382,21 +500,21 @@ const Assessment = () => {
                                       </div>
                                     ))}
                                   </div>
-                                  {!showAISuggestions[q] && (
-                                    <Button 
-                                      variant="ghost" 
-                                      size="sm"
-                                      onClick={() => handleAISuggestions(q)}
-                                      disabled={suggestionLoading}
-                                      className="text-accent hover:text-accent/80 p-0 h-auto font-medium mt-3"
-                                    >
-                                      {suggestionLoading ? (
-                                        <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Getting AI suggestions...</>
-                                      ) : (
-                                        <><Plus className="h-3 w-3 mr-1" /> Get AI Suggestions</>
-                                      )}
-                                    </Button>
-                                  )}
+                                   {!showAISuggestions[q] && layer === 6 && (
+                                     <Button 
+                                       variant="ghost" 
+                                       size="sm"
+                                       onClick={() => handleAISuggestions(q)}
+                                       disabled={aiLoading === q + 'ai_suggest'}
+                                       className="px-4 py-2 rounded-full hover:bg-transparent hover:text-accent hover:border-accent/30 transition-all duration-200 border border-transparent mt-3"
+                                     >
+                                       {aiLoading === q + 'ai_suggest' ? (
+                                         <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Getting AI suggestions...</>
+                                       ) : (
+                                         <><Plus className="h-3 w-3 mr-2" /> Get AI Suggestions</>
+                                       )}
+                                     </Button>
+                                   )}
                                 </div>
                               </div>
                             )}
