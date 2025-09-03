@@ -353,7 +353,7 @@ const Assessment = () => {
                                       size="sm"
                                       onClick={() => handleExpandedExplanation(q)}
                                       disabled={explanationLoading}
-                                      className="text-primary hover:text-primary/80 p-0 h-auto font-medium"
+                                      className="text-primary hover:text-primary/80 p-0 h-auto font-medium animate-magic-glow rounded-full px-3"
                                     >
                                       {explanationLoading ? (
                                         <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Loading...</>
