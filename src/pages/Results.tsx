@@ -9,7 +9,10 @@ import { useToast } from "@/components/ui/use-toast";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
 import html2canvas from "html2canvas";
 import jsPDF from "jspdf";
-import { Loader2, Download, Send } from "lucide-react";
+import { Loader2, Download, Send, TrendingUp, ArrowUpDown } from "lucide-react";
+import { useEnhancedAI } from "@/hooks/useEnhancedAI";
+import { CareerRecommendation, ResponseData } from "@/utils/userProfile";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -33,6 +36,28 @@ const Results = () => {
   const [chat, setChat] = useState<{ from: "user" | "ai"; text: string }[]>([]);
   const [generating, setGenerating] = useState(false);
   const pdfRef = useRef<HTMLDivElement>(null);
+  
+  // AI Enhanced Results State
+  const { generateEnhancedResults, loading: aiLoading } = useEnhancedAI();
+  const [aiEnhanced, setAiEnhanced] = useState<any>(null);
+  const [sortBy, setSortBy] = useState<'compatibility' | 'salary' | 'marketDemand' | 'trends'>('compatibility');
+
+  // Load AI enhanced results
+  useEffect(() => {
+    if (rows.length > 0 && assessId && !aiEnhanced) {
+      const responseData = rows.map(r => ({
+        question_id: r.question_id,
+        response_value: r.response_value,
+        layer_number: r.layer_number
+      })) as ResponseData[];
+      
+      generateEnhancedResults(assessId, responseData).then(result => {
+        if (result) {
+          setAiEnhanced(result);
+        }
+      });
+    }
+  }, [rows, assessId, aiEnhanced, generateEnhancedResults]);
 
   // SEO: title, description, canonical
   useEffect(() => {
@@ -171,6 +196,16 @@ const Results = () => {
         </div>
 
         <div ref={pdfRef} className="space-y-8">
+          {/* Instructional paragraph */}
+          <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+            <CardContent className="p-6">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                The above results are calculated using your quantitative responses from Layers 1-5 (e.g., aptitudes, personality, interests, values, preferences). 
+                Layer 6's open-ended responses have been used qualitatively to inform and train the AI for more personalized guidance in the enhanced analysis below.
+              </p>
+            </CardContent>
+          </Card>
+
           <div className="grid lg:grid-cols-2 gap-8">
             <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '100ms' }}>
               <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
@@ -251,6 +286,148 @@ const Results = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* AI-Enhanced Results Section */}
+          {aiEnhanced && (
+            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '600ms' }}>
+              <CardHeader className="bg-gradient-to-r from-secondary/10 to-primary/10 border-b">
+                <CardTitle className="text-2xl flex items-center gap-3">
+                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-secondary to-primary" />
+                  AI-Enhanced Results (Including Layer 6 Insights)
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                {/* AI Insights */}
+                <div className="mb-8">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <TrendingUp className="h-5 w-5 text-primary" />
+                    AI-Generated Insights
+                  </h3>
+                  <p className="text-sm leading-relaxed text-muted-foreground">{aiEnhanced.insights}</p>
+                </div>
+
+                {/* Career Recommendations with Sorting */}
+                <div className="mb-8">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-accent" />
+                      Personalized Career Recommendations
+                    </h3>
+                    <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Sort by..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="compatibility">Compatibility</SelectItem>
+                        <SelectItem value="salary">Salary</SelectItem>
+                        <SelectItem value="marketDemand">Market Demand</SelectItem>
+                        <SelectItem value="trends">Trends</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {aiEnhanced.recommendations
+                      .sort((a: CareerRecommendation, b: CareerRecommendation) => {
+                        switch (sortBy) {
+                          case 'salary':
+                            const aMin = parseInt(a.salaryRange.split(' - ')[0].replace(/\D/g, ''));
+                            const bMin = parseInt(b.salaryRange.split(' - ')[0].replace(/\D/g, ''));
+                            return bMin - aMin;
+                          case 'marketDemand':
+                            const demandOrder = { High: 3, Medium: 2, Low: 1 };
+                            return demandOrder[b.marketDemand] - demandOrder[a.marketDemand];
+                          case 'trends':
+                            const trendOrder = { Growing: 3, Stable: 2, Declining: 1 };
+                            return trendOrder[b.trends] - trendOrder[a.trends];
+                          default:
+                            return b.compatibilityScore - a.compatibilityScore;
+                        }
+                      })
+                      .map((career: CareerRecommendation, index: number) => (
+                        <div key={index} className="border border-border/50 rounded-lg p-4 hover:border-primary/20 transition-all">
+                          <div className="flex items-start justify-between mb-2">
+                            <h4 className="font-semibold text-primary">{career.title}</h4>
+                            <div className="text-right text-sm">
+                              <div className="font-medium text-accent">{career.compatibilityScore}% Match</div>
+                              <div className="text-xs text-muted-foreground">{career.salaryRange}</div>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground mb-3">{career.description}</p>
+                          <div className="flex items-center gap-4 text-xs">
+                            <span className={`px-2 py-1 rounded ${
+                              career.marketDemand === 'High' ? 'bg-accent/20 text-accent' :
+                              career.marketDemand === 'Medium' ? 'bg-primary/20 text-primary' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {career.marketDemand} Demand
+                            </span>
+                            <span className={`px-2 py-1 rounded ${
+                              career.trends === 'Growing' ? 'bg-accent/20 text-accent' :
+                              career.trends === 'Stable' ? 'bg-primary/20 text-primary' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {career.trends}
+                            </span>
+                            <span className={`px-2 py-1 rounded ${
+                              career.accessibility === 'High' ? 'bg-accent/20 text-accent' :
+                              career.accessibility === 'Medium' ? 'bg-primary/20 text-primary' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {career.accessibility} Access
+                            </span>
+                            {career.onetLink && (
+                              <a 
+                                href={career.onetLink} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-primary hover:underline"
+                              >
+                                O*NET →
+                              </a>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Enhanced Visualization */}
+                {aiEnhanced.visualizationData && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                      <ArrowUpDown className="h-5 w-5 text-secondary" />
+                      Enhanced Visualization
+                    </h3>
+                    <div className="h-96">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RadarChart data={aiEnhanced.visualizationData.labels.map((label: string, i: number) => ({
+                          label,
+                          base: aiEnhanced.visualizationData.baseScores[i],
+                          enhanced: aiEnhanced.visualizationData.enhancedScores[i]
+                        }))}>
+                          <PolarGrid stroke="hsl(var(--border))" />
+                          <PolarAngleAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
+                          <PolarRadiusAxis domain={[0, 5]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
+                          <Radar name="Base Score" dataKey="base" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
+                          <Radar name="Enhanced Score" dataKey="enhanced" stroke="hsl(var(--accent))" fill="hsl(var(--accent))" fillOpacity={0.6} />
+                        </RadarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {aiLoading && (
+            <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+              <CardContent className="p-8 text-center">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground">Generating AI-enhanced insights...</p>
+              </CardContent>
+            </Card>
+          )}
 
           <div className="grid xl:grid-cols-3 gap-8">
             <Card className="xl:col-span-2 animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '300ms' }}>

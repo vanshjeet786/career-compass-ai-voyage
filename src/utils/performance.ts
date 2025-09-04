@@ -62,6 +62,7 @@ class TTLCache<T> {
 }
 
 export const aiResponseCache = new TTLCache<string>()
+export const userProfileCache = new TTLCache<any>()
 
 // Rate limiter for API calls
 class RateLimiter {
