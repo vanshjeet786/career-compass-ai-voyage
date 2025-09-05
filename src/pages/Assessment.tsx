@@ -56,6 +56,13 @@ const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
   return openEndedPatterns.some(pattern => pattern.test(question));
 };
 
+// Function to check if career interests have been provided
+const hasCareerInterests = (responses: Record<string, ResponseValue>) => {
+  const careerQuestion = "My top 3 career interest areas are:";
+  const careerResponse = responses[careerQuestion] as { career1?: string; career2?: string; career3?: string } | undefined;
+  return careerResponse && (careerResponse.career1 || careerResponse.career2 || careerResponse.career3);
+};
+
 type ResponseValue = 
   | { label: string; value: number }
   | { text: string }
@@ -292,7 +299,13 @@ const Assessment = () => {
         <div className="space-y-8">
           {Object.entries(layerData).map(([category, questions], catIdx) => {
             const isCareerClustering = category === "Career_Clustering" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
-            const actualQuestions = isCareerClustering ? (questions as any).questions : questions as string[];
+            const isPassionPracticality = category === "Passion_Practicality" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
+            const actualQuestions = (isCareerClustering || isPassionPracticality) ? (questions as any).questions : questions as string[];
+
+            // Skip Passion_Practicality section if no career interests were provided
+            if (isPassionPracticality && !hasCareerInterests(responses)) {
+              return null;
+            }
 
             return (
               <Card key={category} className="animate-fade-in hover-scale border-0 shadow-lg hover:shadow-xl transition-all duration-300 bg-card/50 backdrop-blur-sm" style={{ animationDelay: `${catIdx * 100}ms` }}>
@@ -301,20 +314,26 @@ const Assessment = () => {
                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent" />
                     {category.replace(/_/g, ' ')}
                   </CardTitle>
-                {isCareerClustering && (
-                    <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
-                      {(questions as any).instructions}
-                    </p>
-                  )}
-                  {category === "Passion_Practicality" && (
+                 {(isCareerClustering || isPassionPracticality) && (
                     <div className="text-sm text-muted-foreground mt-2 leading-relaxed">
                       <p className="mb-2">
-                        <strong>Instructions:</strong> In this section, you'll evaluate your top 3 career interests from the Self-Synthesis section. 
-                        Rate each career on the following dimensions using the scale provided.
+                        <strong>Instructions:</strong> {(questions as any).instructions}
                       </p>
-                      <p className="text-xs">
-                        <em>Note: "Career 1", "Career 2", and "Career 3" refer to the career interests you specified in the Self-Synthesis section's 6th question: "My top 3 career interest areas are".</em>
-                      </p>
+                      {isPassionPracticality && (
+                        <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 mt-3">
+                          <p className="text-xs font-medium text-primary mb-2">Your Career Interests:</p>
+                          {(() => {
+                            const careerResponse = responses["My top 3 career interest areas are:"] as { career1?: string; career2?: string; career3?: string } | undefined;
+                            return (
+                              <div className="text-xs space-y-1">
+                                <div>Career 1: <span className="font-medium">{careerResponse?.career1 || "Not specified"}</span></div>
+                                <div>Career 2: <span className="font-medium">{careerResponse?.career2 || "Not specified"}</span></div>
+                                <div>Career 3: <span className="font-medium">{careerResponse?.career3 || "Not specified"}</span></div>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
                     </div>
                   )}
                 </CardHeader>
@@ -322,7 +341,7 @@ const Assessment = () => {
                   {actualQuestions.map((q, idx) => {
                     const isOtherOption = q.startsWith("Other (");
                     const showSuggestButton = isOpenEndedQuestion(layer, q) || isCareerClustering;
-                    const isMultiCareerInput = q.includes("My top 3 career interest areas are:");
+                    const isMultiCareerInput = q.includes("My top 3 career interest areas are");
 
                     return (
                       <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
@@ -409,7 +428,7 @@ const Assessment = () => {
                               />
                             </div>
                           )
-                        ) : ((category as string) === "Passion_Practicality") ? (
+                        ) : (isPassionPracticality) ? (
                           <div className="space-y-3">
                             <RadioGroup
                               value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
