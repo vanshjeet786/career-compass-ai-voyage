@@ -7,6 +7,7 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Auth from "./pages/Auth";
 import Assessment from "./pages/Assessment";
+import BackgroundInfo from "./pages/BackgroundInfo";
 import Results from "./pages/Results";
 import Profile from "./pages/Profile";
 
@@ -21,6 +22,7 @@ const App = () => (
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/background-info" element={<BackgroundInfo />} />
           <Route path="/assessment" element={<Assessment />} />
           <Route path="/assess" element={<Assessment />} />
           <Route path="/results" element={<Results />} />
