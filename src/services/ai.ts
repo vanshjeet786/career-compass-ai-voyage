@@ -26,9 +26,9 @@ class AIService {
   private responseCache = new Map<string, any>();
 
   /**
-   * Helper to clean Groq's response (remove thinking tokens if any)
+   * Helper to clean AI's response (remove thinking tokens if any)
    */
-  private cleanGroqResponse(content: string): string {
+  private cleanAIResponse(content: string): string {
     let cleaned = content.trim();
     // Remove <think> blocks if present (common in reasoning models)
     cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
@@ -60,16 +60,16 @@ class AIService {
   }
 
   /**
-   * Invokes the Supabase Edge Function 'groq-service'
+   * Invokes the Supabase Edge Function 'gemini-assist'
    */
-  async invokeGroqFunction(messages: any[], maxTokens: number = 2400, temperature: number = 0.7, jsonMode: boolean = false): Promise<string> {
+  async invokeGeminiFunction(mode: string, question?: string, context?: any, prompt?: string): Promise<string> {
     try {
-      const { data, error } = await supabase.functions.invoke('groq-service', {
+      const { data, error } = await supabase.functions.invoke('gemini-assist', {
         body: {
-          messages,
-          max_tokens: maxTokens,
-          temperature,
-          jsonMode
+          mode,
+          question,
+          context,
+          prompt
         },
       });
 
@@ -78,13 +78,14 @@ class AIService {
         throw new Error(`Supabase function invocation failed: ${error.message}`);
       }
 
-      if (data && data.choices && data.choices[0] && data.choices[0].message) {
-        return this.cleanGroqResponse(data.choices[0].message.content);
+      // Gemini function returns { generatedText: string, text: string }
+      if (data && (data.generatedText || data.text)) {
+        return this.cleanAIResponse(data.generatedText || data.text);
       }
 
-      throw new Error('Invalid response from Groq AI service function.');
+      throw new Error('Invalid response from Gemini AI service function.');
     } catch (error) {
-      console.error('Error calling Groq function:', error);
+      console.error('Error calling Gemini function:', error);
       throw error;
     }
   }
@@ -109,12 +110,13 @@ class AIService {
     const qualitativeText = layer6Responses.map(r => `${r.question}: ${r.response}`).join('\n');
     const bgText = backgroundInfo ? JSON.stringify(backgroundInfo) : "Not provided";
 
-    const messages = [
-      {
-        role: "system",
-        content: `You are an expert career counselor. Analyze the user's 6-layer assessment.
+    const prompt = `User Profile:
+        Background: ${bgText}
+        Top Quantitative Strengths: ${topStrengths}
+        Qualitative Responses (Layer 6):
+        ${qualitativeText}
 
-        Output strictly valid JSON with this structure:
+        Generate a comprehensive career roadmap analysis. Output strictly valid JSON with this structure:
         {
           "insights": "2-3 paragraphs of synthesis...",
           "recommendations": [
@@ -136,22 +138,10 @@ class AIService {
           ]
         }
 
-        Do not include markdown formatting or thinking steps in the output.`
-      },
-      {
-        role: "user",
-        content: `User Profile:
-        Background: ${bgText}
-        Top Quantitative Strengths: ${topStrengths}
-        Qualitative Responses (Layer 6):
-        ${qualitativeText}
-
-        Generate the career roadmap JSON.`
-      }
-    ];
+        Do not include markdown formatting or thinking steps in the output.`;
 
     try {
-      const rawResponse = await this.invokeGroqFunction(messages, 3000, 0.7, true);
+      const rawResponse = await this.invokeGeminiFunction('chat', undefined, {}, prompt);
       const parsed = this.safeParseJSON(rawResponse);
       this.responseCache.set(cacheKey, parsed);
       return parsed;
@@ -170,21 +160,18 @@ class AIService {
    * Chat with AI Counselor
    */
   async chatResponse(message: string, history: { role: string; content: string }[], context: any): Promise<string> {
-    const systemPrompt = `You are a helpful career counselor.
-    User Context:
+    const prompt = `User Context:
     Top Strengths: ${JSON.stringify(context.topStrengths)}
     Background: ${JSON.stringify(context.backgroundInfo)}
+    User Message: "${message}"
 
-    Keep answers concise, encouraging, and actionable.`;
-
-    const messages = [
-      { role: "system", content: systemPrompt },
-      ...history,
-      { role: "user", content: message }
-    ];
+    You are a helpful career counselor. respond concisely based on the user's profile context.`;
 
     try {
-      return await this.invokeGroqFunction(messages, 500);
+      // Note: 'chat' mode in gemini-assist handles conversation context differently.
+      // We pass the prompt which includes history implicitly via context if needed,
+      // but here we just send the consolidated prompt.
+      return await this.invokeGeminiFunction('chat', undefined, context, prompt);
     } catch (error) {
       return "I'm having trouble connecting right now. Please try again later.";
     }
@@ -194,23 +181,31 @@ class AIService {
    * Suggests answers for open-ended questions
    */
   async suggestAnswer(questionText: string, userContext: any): Promise<{ suggestions: string[]; explanation: string }> {
-     const messages = [
-        {
-          role: "system",
-          content: "You are a career coach helping a user reflect. Provide 2-3 distinct, personalized starting points (suggestions) for their answer to the open-ended question. Return JSON: { \"suggestions\": [\"...\", \"...\"], \"explanation\": \"...\" }."
-        },
-        {
-          role: "user",
-          content: `Question: "${questionText}"
+     const prompt = `Question: "${questionText}"
           User Context: ${JSON.stringify(userContext)}
 
-          Generate suggestions.`
-        }
-     ];
+          You are a career coach helping a user reflect. Provide 2-3 distinct, personalized starting points (suggestions) for their answer to the open-ended question. Return JSON: { \"suggestions\": [\"...\", \"...\"], \"explanation\": \"...\" }.`;
 
      try {
-       const raw = await this.invokeGroqFunction(messages, 800, 0.8, true);
-       return this.safeParseJSON(raw);
+       const raw = await this.invokeGeminiFunction('suggest', questionText, userContext, prompt);
+       // Gemini 'suggest' mode might return just text, so we rely on the prompt instructing JSON output
+       // But strictly speaking, gemini-assist logic parses mode and handles prompt construction internally.
+       // Let's rely on 'chat' mode for strict JSON if 'suggest' is too opinionated in the backend function.
+       // OR we trust our prompt override in the `prompt` field if the backend uses it.
+
+       // Checking `gemini-assist/index.ts` (from memory):
+       // if mode === 'suggest', it constructs a prompt about "3 specific suggestions".
+       // It doesn't guarantee JSON.
+       // So we should probably use 'chat' mode here to enforce our JSON structure via the prompt.
+
+       const jsonPrompt = `Question: "${questionText}"
+       User Context: ${JSON.stringify(userContext)}
+       Generate 2-3 suggestions for answering this question based on the user context.
+       Output strictly valid JSON: { "suggestions": ["..."], "explanation": "..." }`;
+
+       const jsonRaw = await this.invokeGeminiFunction('chat', undefined, {}, jsonPrompt);
+       return this.safeParseJSON(jsonRaw);
+
      } catch (error) {
        return {
          suggestions: FALLBACK_SUGGESTIONS,

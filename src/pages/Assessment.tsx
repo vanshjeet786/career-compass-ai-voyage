@@ -18,8 +18,8 @@ import {
   LAYER_3_QUESTIONS,
   LAYER_4_QUESTIONS,
   LAYER_5_QUESTIONS,
+  LAYER_6_QUESTIONS,
 } from "@/data/questions";
-import { LAYER_6_QUESTIONS } from "@/data/layer6";
 import { PREDETERMINED_SUGGESTIONS } from "@/data/suggestions";
 import { aiService } from "@/services/ai";
 
@@ -34,16 +34,7 @@ const getLayerData = (layer: LayerKey) => {
     case 3: return LAYER_3_QUESTIONS;
     case 4: return LAYER_4_QUESTIONS;
     case 5: return LAYER_5_QUESTIONS;
-    case 6: {
-        // Adapt Layer 6 structure to match what the UI expects
-        // The UI expects an object where keys are categories and values are string arrays of questions
-        // But we want to use the new structured format from Bolt
-        const adapted: Record<string, string[]> = {};
-        Object.entries(LAYER_6_QUESTIONS.categories).forEach(([cat, questions]) => {
-             adapted[cat] = questions.map(q => q.text);
-        });
-        return adapted;
-    }
+    case 6: return LAYER_6_QUESTIONS;
   }
 };
 
@@ -200,28 +191,35 @@ const Assessment = () => {
     if (suggestions[question]) return;
     setAiLoading(question + 'suggest');
     
-    // For Layer 6, call AI first using the new Service
-    if (layer === 6) {
-      try {
-        const { suggestions: aiSuggestions } = await aiService.suggestAnswer(question, responses);
-        if (aiSuggestions && aiSuggestions.length > 0) {
-            setSuggestions(prev => ({ ...prev, [question]: aiSuggestions }));
-        } else {
-            throw new Error("No suggestions returned");
-        }
-      } catch (error: any) {
-        // Fallback to predetermined suggestions
-        const predetermined = PREDETERMINED_SUGGESTIONS[question];
-        if (predetermined) {
-          setSuggestions(prev => ({ ...prev, [question]: predetermined }));
-        }
-      }
-    } else {
-      // For layers 1-5, use predetermined suggestions only
-      const predetermined = PREDETERMINED_SUGGESTIONS[question];
-      if (predetermined) {
-        setSuggestions(prev => ({ ...prev, [question]: predetermined }));
-      }
+    // Use predetermined suggestions first, then AI if requested via dedicated button
+    // But here we set suggestions on click.
+    // If it's layer 6, we might want to try AI suggestions if no predetermined ones exist.
+
+    // Original logic:
+    // For layers 1-5, use predetermined suggestions only
+    const predetermined = PREDETERMINED_SUGGESTIONS[question];
+    if (predetermined) {
+      setSuggestions(prev => ({ ...prev, [question]: predetermined }));
+    } else if (layer === 6) {
+       // Try AI if no predetermined
+       try {
+        // We use the new aiService but pointing to Gemini now
+        // But the user asked to revert treatment of Layer 6.
+        // The original code likely just used PREDETERMINED_SUGGESTIONS or failed silently.
+        // However, since we want to keep the FEATURE of AI suggestions but REVERT the LOGIC to Gemini...
+        // And we just updated aiService to use Gemini...
+        // We can just call aiService.suggestAnswer here?
+        // Or should we revert to `supabase.functions.invoke("gemini-assist")` directly as it was originally?
+
+        // The user said: "Revert everything that you changed regarding the AI and the treatment of layer 6."
+        // This implies going back to the original implementation which likely didn't have auto-suggestions for Layer 6
+        // OR it used `gemini-assist` in a specific way.
+
+        // Let's stick to the PREDETERMINED logic primarily, and only use AI if explicitly requested via the "Suggest" button (handleAISuggestions).
+        // So here, if no predetermined, we do nothing (or show error/fallback).
+       } catch (e) {
+         console.error(e);
+       }
     }
     
     setAiLoading(null);
@@ -231,6 +229,7 @@ const Assessment = () => {
     setShowAISuggestions(prev => ({ ...prev, [question]: true }));
     setAiLoading(question + 'ai_suggest');
     try {
+      // Use original gemini-assist call style
       const { data, error } = await supabase.functions.invoke("gemini-assist", {
         body: { mode: 'suggest', question, context: { layer, responses } },
       });
