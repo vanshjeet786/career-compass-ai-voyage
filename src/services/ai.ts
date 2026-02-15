@@ -107,17 +107,31 @@ class AIService {
       .map(([k, v]) => `${k}: ${v.toFixed(1)}/5`)
       .join(', ');
 
-    const qualitativeText = layer6Responses.map(r => `${r.question}: ${r.response}`).join('\n');
+    // Filter out empty responses to avoid cluttering the prompt
+    const qualitativeText = layer6Responses
+      .filter(r => r.response && r.response.trim().length > 0)
+      .map(r => `Question: "${r.question}"\nAnswer: "${r.response}"`)
+      .join('\n\n');
+
     const bgText = backgroundInfo ? JSON.stringify(backgroundInfo) : "Not provided";
 
-    const prompt = `User Profile:
-        Background: ${bgText}
-        Top Quantitative Strengths: ${topStrengths}
-        Qualitative Responses (Layer 6):
-        ${qualitativeText}
+    const prompt = `You are an expert career counselor. Analyze this user's comprehensive assessment data including 6 layers of quantitative and qualitative inputs.
 
-        Generate a comprehensive career roadmap analysis. Output strictly valid JSON with this structure:
-        {
+    USER PROFILE CONTEXT:
+    Background Info: ${bgText}
+
+    QUANTITATIVE STRENGTHS (Layers 1-5):
+    ${topStrengths}
+
+    QUALITATIVE INSIGHTS (Layer 6 - Open Ended & Mixed):
+    ${qualitativeText || "No qualitative responses provided."}
+
+    TASK:
+    Generate a personalized career roadmap and executive summary. Synthesize the quantitative scores with the qualitative nuances from Layer 6 and their background context.
+
+    OUTPUT FORMAT:
+    Return strictly valid JSON with this structure:
+    {
           "insights": "2-3 paragraphs of synthesis...",
           "recommendations": [
             {

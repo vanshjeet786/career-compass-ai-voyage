@@ -106,6 +106,11 @@ const Assessment = () => {
     canonical.href = window.location.origin + '/assessment';
   }, [layer]);
 
+  // Update check for open-ended questions to include Layer 6 specific questions
+  const isOpenEnded = (question: string) => {
+    return isOpenEndedQuestion(layer, question);
+  };
+
   // Load or create assessment
   useEffect(() => {
     if (!user) return;
@@ -380,7 +385,7 @@ const Assessment = () => {
                           </div>
                         </div>
 
-                        {layer <= 5 || !isCareerClustering ? (
+                        {layer <= 5 || (!isCareerClustering && !isOpenEnded(q)) ? (
                           layer <= 5 ? (
                             <div className="space-y-3">
                               <RadioGroup
