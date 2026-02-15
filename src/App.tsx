@@ -10,6 +10,7 @@ import Assessment from "./pages/Assessment";
 import BackgroundInfo from "./pages/BackgroundInfo";
 import Results from "./pages/Results";
 import Profile from "./pages/Profile";
+import { Navbar } from "./components/Layout/Navbar";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <Navbar />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/auth" element={<Auth />} />

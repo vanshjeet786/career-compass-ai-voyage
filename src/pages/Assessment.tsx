@@ -253,6 +253,45 @@ const Assessment = () => {
 
   const nextLayer = async () => {
     if (!assessmentId) return;
+
+    // Validate mandatory questions
+    const currentQuestions = Object.values(layerData).flat();
+    // Flatten structure for complex layers (like clustering)
+    let actualQuestions: string[] = [];
+    if (layer === 6) {
+        // Layer 6 is a mix, handle if needed, but standard logic handles it if layerData is just strings
+        actualQuestions = currentQuestions as string[];
+    } else {
+        actualQuestions = Object.values(layerData).flatMap(val => {
+            if (typeof val === 'object' && !Array.isArray(val) && 'questions' in val) {
+                return (val as any).questions;
+            }
+            return val;
+        }) as string[];
+    }
+
+    const missing = actualQuestions.filter(q => {
+        // Passion practicality is optional if no careers selected
+        if (q.includes("Passion_Practicality") && !hasCareerInterests(responses)) return false;
+
+        const response = responses[q];
+        if (!response) return true;
+        if ('value' in response) return false; // Likert
+        if ('text' in response) return !response.text.trim(); // Open ended
+        if ('career1' in response) return !response.career1; // Career clustering
+        if ('customText' in response) return false; // Other option (radio is checked so response exists)
+        return true;
+    });
+
+    if (missing.length > 0) {
+        toast({
+            title: "Please complete all questions",
+            description: `You have ${missing.length} unanswered questions in this section.`,
+            variant: "destructive"
+        });
+        return;
+    }
+
     const next = (layer + 1) as LayerKey;
     const done = next > 6;
     try {
@@ -263,6 +302,7 @@ const Assessment = () => {
       } else {
         setLayer(next);
         await supabase.from("assessments").update({ current_layer: next }).eq("id", assessmentId);
+        window.scrollTo(0, 0);
       }
     } catch (error: any) {
       toast({ title: "Error advancing layer", description: error.message, variant: "destructive" });

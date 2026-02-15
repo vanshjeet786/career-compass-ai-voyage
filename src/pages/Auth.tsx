@@ -20,7 +20,7 @@ const Auth = () => {
 
   if (user) {
     // Redirect authenticated users
-    navigate("/assess");
+    navigate("/background-info");
   }
 
   const handleEmailAuth = async () => {
@@ -55,7 +55,7 @@ const Auth = () => {
         });
         if (error) throw error;
         toast({ title: "Welcome back", description: "You are now signed in." });
-        navigate("/assess");
+        navigate("/background-info");
       }
     } catch (e: unknown) {
       const message = e instanceof Error ? e.message : "Invalid credentials. Please check your email and password.";
