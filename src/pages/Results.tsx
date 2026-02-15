@@ -1,29 +1,20 @@
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from "recharts";
-import html2canvas from "html2canvas";
-import jsPDF from "jspdf";
-import { Loader2, Download, Send, TrendingUp, ArrowUpDown } from "lucide-react";
-import { useEnhancedAI } from "@/hooks/useEnhancedAI";
-import { CareerRecommendation, ResponseData } from "@/utils/userProfile";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from "recharts";
+import { Loader2, Download, TrendingUp, BarChart3, Activity, PieChart, Lightbulb, Target } from "lucide-react";
+import { aiService } from "@/services/ai";
+import { useAssessmentHistory } from "@/hooks/useAssessmentHistory";
+import { generatePDFReport } from "@/utils/pdfGenerator";
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
-}
-
-type ResponseValue = { label: string; value: number } | { text: string };
-
-interface RespRow {
-  question_id: string;
-  response_value: ResponseValue;
-  layer_number: number;
 }
 
 const Results = () => {
@@ -31,73 +22,45 @@ const Results = () => {
   const { toast } = useToast();
   const q = useQuery();
   const assessId = q.get("assess");
-  const [rows, setRows] = useState<RespRow[]>([]);
-  const [chatInput, setChatInput] = useState("");
-  const [chat, setChat] = useState<{ from: "user" | "ai"; text: string }[]>([]);
-  const [generating, setGenerating] = useState(false);
-  const pdfRef = useRef<HTMLDivElement>(null);
   
-  // AI Enhanced Results State
-  const { generateEnhancedResults, loading: aiLoading } = useEnhancedAI();
+  const [activeTab, setActiveTab] = useState("overview");
+  const [rows, setRows] = useState<any[]>([]);
+  const [assessment, setAssessment] = useState<any>(null);
   const [aiEnhanced, setAiEnhanced] = useState<any>(null);
-  const [sortBy, setSortBy] = useState<'compatibility' | 'salary' | 'marketDemand' | 'trends'>('compatibility');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  // Load AI enhanced results
-  useEffect(() => {
-    if (rows.length > 0 && assessId && !aiEnhanced) {
-      const responseData = rows.map(r => ({
-        question_id: r.question_id,
-        response_value: r.response_value,
-        layer_number: r.layer_number
-      })) as ResponseData[];
-      
-      generateEnhancedResults(assessId, responseData).then(result => {
-        if (result) {
-          setAiEnhanced(result);
-        }
-      });
-    }
-  }, [rows, assessId, aiEnhanced, generateEnhancedResults]);
+  const reportRef = useRef<HTMLDivElement>(null);
+  const { assessments: history, getProgressAnalysis } = useAssessmentHistory();
 
-  // SEO: title, description, canonical
-  useEffect(() => {
-    document.title = "Career Compass Results - Insights & PDF";
-    const metaDesc = "View your Career Compass results, insights, and download your PDF report.";
-    let descTag = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
-    if (!descTag) {
-      descTag = document.createElement('meta');
-      descTag.name = 'description';
-      document.head.appendChild(descTag);
-    }
-    descTag.content = metaDesc;
-    let canonical = document.querySelector('link[rel="canonical"]') as HTMLLinkElement | null;
-    if (!canonical) {
-      canonical = document.createElement('link');
-      canonical.rel = 'canonical';
-      document.head.appendChild(canonical);
-    }
-    canonical.href = window.location.origin + '/results';
-  }, []);
-
+  // Load Assessment Data
   useEffect(() => {
     if (!assessId) return;
     (async () => {
+      // 1. Fetch metadata (background info, etc)
+      const { data: assessData } = await supabase
+        .from("assessments")
+        .select("*")
+        .eq("id", assessId)
+        .single();
+      setAssessment(assessData);
+
+      // 2. Fetch responses
       const { data, error } = await supabase
         .from("assessment_responses")
         .select("question_id, response_value, layer_number")
         .eq("assessment_id", assessId)
         .order("created_at", { ascending: true });
+
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        setRows(data?.map(row => ({
-          ...row,
-          response_value: row.response_value as ResponseValue
-        })) || []);
+        setRows(data || []);
       }
     })();
-  }, [assessId, toast]);
+  }, [assessId]);
 
+  // Calculate Scores
   const catAverages = useMemo(() => {
     const map: Record<string, { sum: number; count: number }> = {};
     for (const r of rows) {
@@ -111,54 +74,47 @@ const Results = () => {
     return Object.entries(map).map(([name, v]) => ({ name, score: Number((v.sum / v.count).toFixed(2)) }));
   }, [rows]);
 
-  const exportPDF = async () => {
-    if (!pdfRef.current) return;
-    setGenerating(true);
-    try {
-      const canvas = await html2canvas(pdfRef.current, { scale: 2 });
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF({ orientation: "p", unit: "pt", format: "a4" });
-      const pageWidth = pdf.internal.pageSize.getWidth();
-      const pageHeight = pdf.internal.pageSize.getHeight();
-      const imgWidth = pageWidth - 40;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      pdf.addImage(imgData, "PNG", 20, 20, imgWidth, Math.min(imgHeight, pageHeight - 40));
-      pdf.save("career-compass-report.pdf");
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "An unknown error occurred.";
-      toast({ title: "PDF error", description: message, variant: "destructive" });
-    } finally {
-      setGenerating(false);
-    }
-  };
+  // Generate AI Enhanced Results
+  useEffect(() => {
+    if (rows.length > 0 && assessment && !aiEnhanced && !aiLoading) {
+      setAiLoading(true);
+      const scores = catAverages.reduce((acc, curr) => ({ ...acc, [curr.name]: curr.score }), {});
 
-  const sendChat = async () => {
-    if (!chatInput.trim()) return;
-    const userMsg = { from: "user" as const, text: chatInput };
-    setChat((c) => [...c, userMsg]);
-    setChatInput("");
+      // Filter for open-ended (Layer 6)
+      const layer6 = rows
+        .filter(r => r.layer_number === 6)
+        .map(r => ({ question: r.question_id, response: r.response_value?.text || "" }));
+
+      aiService.generateEnhancedResults(scores, layer6, assessment.background_info)
+        .then(res => setAiEnhanced(res))
+        .catch(err => console.error(err))
+        .finally(() => setAiLoading(false));
+    }
+  }, [rows, assessment]);
+
+  const progressAnalysis = useMemo(() => {
+      if (!assessId || history.length < 2) return null;
+      // Find the ID of the assessment we are viewing. If we are viewing the latest, it's easy.
+      // But we might be viewing an old one.
+      // Currently assuming we view the one from URL.
+      return getProgressAnalysis(assessId); // This needs to be implemented in the hook to take an ID
+  }, [assessId, history]);
+
+
+  const handleDownloadPDF = async () => {
+    setGeneratingPdf(true);
     try {
-      // Get user's assessment responses for context
-      const { data: responsesData } = await supabase
-        .from("assessment_responses")
-        .select("question_id, response_value, layer_number")
-        .eq("assessment_id", assessId);
-      
-      // Create a summary of the user's responses for better context
-      const context = {
-        assessId,
-        catAverages,
-        responses: responsesData || []
-      };
-      
-      const { data, error } = await supabase.functions.invoke("gemini-assist", {
-        body: { mode: "chat", prompt: userMsg.text, context },
-      });
-      if (error) throw error;
-      setChat((c) => [...c, { from: "ai", text: data.text }]);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "An unknown error occurred.";
-      toast({ title: "Chat error", description: message, variant: "destructive" });
+        await generatePDFReport('report-container', {
+            userName: user?.email || "User", // Ideally full name
+            scores: catAverages.reduce((acc, curr) => ({ ...acc, [curr.name]: curr.score }), {}),
+            insights: aiEnhanced?.insights || "Analysis pending...",
+            topStrengths: catAverages.sort((a,b) => b.score - a.score).slice(0,3).map(c => c.name)
+        });
+        toast({ title: "Report Downloaded", description: "Your comprehensive career report is ready." });
+    } catch (e) {
+        toast({ title: "Download Failed", description: "Could not generate PDF.", variant: "destructive" });
+    } finally {
+        setGeneratingPdf(false);
     }
   };
 
@@ -166,367 +122,196 @@ const Results = () => {
   if (!user) return <Navigate to="/auth" replace />;
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <div className="container py-12 max-w-7xl">
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6 animate-fade-in">
-          <div className="text-center md:text-left">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
-              ✨ Assessment Complete
-            </div>
-            <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent mb-4">
-              Your Career Insights
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl">
-              Comprehensive analysis of your strengths, preferences, and career potential
-            </p>
+    <main className="min-h-screen bg-gray-50/50 pb-20">
+      <div className="container py-8 max-w-7xl">
+
+        {/* Header */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-10">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Assessment Results</h1>
+            <p className="text-muted-foreground mt-2">Comprehensive analysis of your career potential.</p>
           </div>
-          <Button 
-            onClick={exportPDF} 
-            disabled={generating}
-            size="lg"
-            className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200 hover-scale"
-          >
-            {generating ? (
-              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-            ) : (
-              <Download className="h-5 w-5 mr-2" />
-            )}
-            Download Report
-          </Button>
+          <div className="flex gap-3">
+             <Button variant="outline" onClick={() => window.print()} className="hidden md:flex">
+                Print
+             </Button>
+             <Button onClick={handleDownloadPDF} disabled={generatingPdf} className="bg-primary">
+                {generatingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4"/>}
+                Download Report
+             </Button>
+          </div>
         </div>
 
-        <div ref={pdfRef} className="space-y-8">
-          {/* Instructional paragraph */}
-          <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-            <CardContent className="p-6">
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                The above results are calculated using your quantitative responses from Layers 1-5 (e.g., aptitudes, personality, interests, values, preferences). 
-                Layer 6's open-ended responses have been used qualitatively to inform and train the AI for more personalized guidance in the enhanced analysis below.
-              </p>
-            </CardContent>
-          </Card>
+        {/* Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
+          <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="detailed">Detailed Analysis</TabsTrigger>
+            <TabsTrigger value="progress">Progress</TabsTrigger>
+          </TabsList>
 
-          <div className="grid lg:grid-cols-2 gap-8">
-            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '100ms' }}>
-              <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
-                <CardTitle className="text-2xl flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
-                  Intelligence & Aptitude Overview
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8" style={{ height: 480 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={catAverages} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                    <XAxis 
-                      dataKey="name" 
-                      angle={-20} 
-                      textAnchor="end" 
-                      height={80} 
-                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    />
-                    <YAxis 
-                      domain={[1, 5]} 
-                      tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                    />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: 'hsl(var(--card))', 
-                        border: '1px solid hsl(var(--border))',
-                        borderRadius: '8px',
-                        boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
-                      }}
-                    />
-                    <Bar 
-                      dataKey="score" 
-                      fill="url(#barGradient)" 
-                      radius={[4, 4, 0, 0]}
-                    />
-                    <defs>
-                      <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="hsl(var(--primary))" />
-                        <stop offset="100%" stopColor="hsl(var(--accent))" />
-                      </linearGradient>
-                    </defs>
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+          {/* REPORT CONTAINER FOR PDF */}
+          <div id="report-container" ref={reportRef} className="space-y-8">
 
-            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '200ms' }}>
-              <CardHeader className="bg-gradient-to-r from-accent/10 to-primary/10 border-b">
-                <CardTitle className="text-2xl flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-accent to-primary" />
-                  Strengths Radar
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8" style={{ height: 480 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={catAverages} margin={{ top: 20, right: 80, bottom: 20, left: 80 }}>
-                    <PolarGrid stroke="hsl(var(--border))" />
-                    <PolarAngleAxis 
-                      dataKey="name" 
-                      tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
-                    />
-                    <PolarRadiusAxis 
-                      domain={[1, 5]} 
-                      tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                      stroke="hsl(var(--muted-foreground))"
-                    />
-                    <Radar 
-                      name="Score" 
-                      dataKey="score" 
-                      stroke="hsl(var(--primary))" 
-                      fill="hsl(var(--primary))" 
-                      fillOpacity={0.3}
-                      strokeWidth={3}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
-          </div>
+            {/* OVERVIEW TAB */}
+            <TabsContent value="overview" className="space-y-6">
 
-          {/* AI-Enhanced Results Section */}
-          {aiEnhanced && (
-            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '600ms' }}>
-              <CardHeader className="bg-gradient-to-r from-secondary/10 to-primary/10 border-b">
-                <CardTitle className="text-2xl flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-secondary to-primary" />
-                  AI-Enhanced Results (Including Layer 6 Insights)
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8">
-                {/* AI Insights */}
-                <div className="mb-8">
-                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                    <TrendingUp className="h-5 w-5 text-primary" />
-                    AI-Generated Insights
-                  </h3>
-                  <p className="text-sm leading-relaxed text-muted-foreground">{aiEnhanced.insights}</p>
-                </div>
-
-                {/* Career Recommendations with Sorting */}
-                <div className="mb-8">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold flex items-center gap-2">
-                      <TrendingUp className="h-5 w-5 text-accent" />
-                      Personalized Career Recommendations
-                    </h3>
-                    <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
-                      <SelectTrigger className="w-40">
-                        <SelectValue placeholder="Sort by..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="compatibility">Compatibility</SelectItem>
-                        <SelectItem value="salary">Salary</SelectItem>
-                        <SelectItem value="marketDemand">Market Demand</SelectItem>
-                        <SelectItem value="trends">Trends</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  
-                  <div className="space-y-4">
-                    {aiEnhanced.recommendations
-                      .sort((a: CareerRecommendation, b: CareerRecommendation) => {
-                        switch (sortBy) {
-                          case 'salary':
-                            const aMin = parseInt(a.salaryRange.split(' - ')[0].replace(/\D/g, ''));
-                            const bMin = parseInt(b.salaryRange.split(' - ')[0].replace(/\D/g, ''));
-                            return bMin - aMin;
-                          case 'marketDemand':
-                            const demandOrder = { High: 3, Medium: 2, Low: 1 };
-                            return demandOrder[b.marketDemand] - demandOrder[a.marketDemand];
-                          case 'trends':
-                            const trendOrder = { Growing: 3, Stable: 2, Declining: 1 };
-                            return trendOrder[b.trends] - trendOrder[a.trends];
-                          default:
-                            return b.compatibilityScore - a.compatibilityScore;
-                        }
-                      })
-                      .map((career: CareerRecommendation, index: number) => (
-                        <div key={index} className="border border-border/50 rounded-lg p-4 hover:border-primary/20 transition-all">
-                          <div className="flex items-start justify-between mb-2">
-                            <h4 className="font-semibold text-primary">{career.title}</h4>
-                            <div className="text-right text-sm">
-                              <div className="font-medium text-accent">{career.compatibilityScore}% Match</div>
-                              <div className="text-xs text-muted-foreground">{career.salaryRange}</div>
+                {/* AI Insights Card */}
+                <Card className="border-primary/20 bg-primary/5">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-primary">
+                            <Lightbulb className="h-5 w-5"/> AI Executive Summary
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {aiLoading ? (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                                <Loader2 className="h-4 w-4 animate-spin"/> Analyzing your profile...
                             </div>
-                          </div>
-                          <p className="text-sm text-muted-foreground mb-3">{career.description}</p>
-                          <div className="flex items-center gap-4 text-xs">
-                            <span className={`px-2 py-1 rounded ${
-                              career.marketDemand === 'High' ? 'bg-accent/20 text-accent' :
-                              career.marketDemand === 'Medium' ? 'bg-primary/20 text-primary' :
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {career.marketDemand} Demand
-                            </span>
-                            <span className={`px-2 py-1 rounded ${
-                              career.trends === 'Growing' ? 'bg-accent/20 text-accent' :
-                              career.trends === 'Stable' ? 'bg-primary/20 text-primary' :
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {career.trends}
-                            </span>
-                            <span className={`px-2 py-1 rounded ${
-                              career.accessibility === 'High' ? 'bg-accent/20 text-accent' :
-                              career.accessibility === 'Medium' ? 'bg-primary/20 text-primary' :
-                              'bg-muted text-muted-foreground'
-                            }`}>
-                              {career.accessibility} Access
-                            </span>
-                            {career.onetLink && (
-                              <a 
-                                href={career.onetLink} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-primary hover:underline"
-                              >
-                                O*NET →
-                              </a>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                  </div>
+                        ) : (
+                            <div className="prose text-gray-700 max-w-none">
+                                {aiEnhanced?.insights ? (
+                                    aiEnhanced.insights.split('\n').map((p: string, i: number) => <p key={i}>{p}</p>)
+                                ) : (
+                                    <p>No insights generated yet.</p>
+                                )}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                {/* Top Strengths */}
+                <div className="grid md:grid-cols-3 gap-6">
+                    {catAverages.sort((a,b) => b.score - a.score).slice(0,3).map((cat, i) => (
+                        <Card key={i} className="text-center hover:shadow-lg transition-all">
+                            <CardHeader className="pb-2">
+                                <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-2">
+                                    <Target className="h-6 w-6 text-primary"/>
+                                </div>
+                                <CardTitle className="text-lg">#{i+1} Strength</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-gray-900">{cat.name}</div>
+                                <div className="text-muted-foreground">{cat.score.toFixed(1)}/5.0</div>
+                            </CardContent>
+                        </Card>
+                    ))}
                 </div>
 
-                {/* Enhanced Visualization */}
-                {aiEnhanced.visualizationData && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                      <ArrowUpDown className="h-5 w-5 text-secondary" />
-                      Enhanced Visualization
-                    </h3>
-                    <div className="h-96">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <RadarChart data={aiEnhanced.visualizationData.labels.map((label: string, i: number) => ({
-                          label,
-                          base: aiEnhanced.visualizationData.baseScores[i],
-                          enhanced: aiEnhanced.visualizationData.enhancedScores[i]
-                        }))}>
-                          <PolarGrid stroke="hsl(var(--border))" />
-                          <PolarAngleAxis dataKey="label" tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }} />
-                          <PolarRadiusAxis domain={[0, 5]} tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }} />
-                          <Radar name="Base Score" dataKey="base" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
-                          <Radar name="Enhanced Score" dataKey="enhanced" stroke="hsl(var(--accent))" fill="hsl(var(--accent))" fillOpacity={0.6} />
-                        </RadarChart>
-                      </ResponsiveContainer>
+                {/* Main Charts */}
+                <div className="grid lg:grid-cols-2 gap-8">
+                    <Card>
+                        <CardHeader><CardTitle>Aptitude Profile</CardTitle></CardHeader>
+                        <CardContent className="h-[300px]">
+                            <ResponsiveContainer width="100%" height="100%">
+                                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={catAverages}>
+                                    <PolarGrid />
+                                    <PolarAngleAxis dataKey="name" tick={{fontSize: 10}} />
+                                    <PolarRadiusAxis angle={30} domain={[0, 5]} />
+                                    <Radar name="Score" dataKey="score" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
+                                    <Legend />
+                                </RadarChart>
+                            </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader><CardTitle>Score Distribution</CardTitle></CardHeader>
+                        <CardContent className="h-[300px]">
+                             <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={catAverages}>
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} tick={{fontSize: 10}}/>
+                                    <YAxis domain={[0, 5]} />
+                                    <Tooltip />
+                                    <Bar dataKey="score" fill="#82ca9d" />
+                                </BarChart>
+                             </ResponsiveContainer>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* AI Roadmap */}
+                {aiEnhanced?.recommendations && (
+                    <div className="space-y-6">
+                        <h2 className="text-2xl font-bold">Recommended Career Paths</h2>
+                        <div className="grid md:grid-cols-2 gap-6">
+                            {aiEnhanced.recommendations.map((rec: any, i: number) => (
+                                <Card key={i} className="border-l-4 border-l-primary">
+                                    <CardHeader>
+                                        <CardTitle>{rec.name}</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        <div>
+                                            <div className="text-sm font-semibold text-green-600">Why it fits:</div>
+                                            <p className="text-sm text-gray-600">{rec.layer6Match}</p>
+                                        </div>
+                                        <div>
+                                            <div className="text-sm font-semibold">Next Steps:</div>
+                                            <ul className="list-disc list-inside text-sm text-gray-600">
+                                                {rec.nextSteps?.map((step: string, j: number) => <li key={j}>{step}</li>)}
+                                            </ul>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
                     </div>
-                  </div>
                 )}
-              </CardContent>
-            </Card>
-          )}
+            </TabsContent>
 
-          {aiLoading && (
-            <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm">
-              <CardContent className="p-8 text-center">
-                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                <p className="text-sm text-muted-foreground">Generating AI-enhanced insights...</p>
-              </CardContent>
-            </Card>
-          )}
+            {/* DETAILED ANALYSIS TAB */}
+            <TabsContent value="detailed" className="space-y-6">
+                <Card>
+                    <CardHeader>
+                         <CardTitle className="flex items-center gap-2">
+                            <PieChart className="h-5 w-5"/> Comprehensive Category Breakdown
+                         </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-4">
+                            {catAverages.map((cat, i) => (
+                                <div key={i} className="flex items-center gap-4">
+                                    <div className="w-1/3 text-sm font-medium">{cat.name}</div>
+                                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                                        <div
+                                            className="h-full bg-primary"
+                                            style={{ width: `${(cat.score / 5) * 100}%` }}
+                                        />
+                                    </div>
+                                    <div className="w-12 text-sm font-bold text-right">{cat.score}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            </TabsContent>
 
-          <div className="grid xl:grid-cols-3 gap-8">
-            <Card className="xl:col-span-2 animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '300ms' }}>
-              <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
-                <CardTitle className="text-2xl flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
-                  Recommendations & Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-8">
-                <div className="grid md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg text-primary">Top Strengths</h3>
-                    <div className="space-y-3">
-                      {catAverages.sort((a, b) => b.score - a.score).slice(0, 3).map((cat, idx) => (
-                        <div key={cat.name} className="flex items-center gap-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center text-primary-foreground text-sm font-bold">
-                            {idx + 1}
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-medium">{cat.name}</p>
-                            <p className="text-sm text-muted-foreground">Score: {cat.score}/5</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="space-y-4">
-                    <h3 className="font-semibold text-lg text-accent">Action Items</h3>
-                    <ul className="space-y-3">
-                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
-                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
-                        <span className="text-sm">Focus on top-scoring categories for skill development</span>
-                      </li>
-                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
-                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
-                        <span className="text-sm">Align projects with your highest strengths</span>
-                      </li>
-                      <li className="flex items-start gap-3 p-3 rounded-lg bg-accent/5 border border-accent/20">
-                        <div className="w-2 h-2 rounded-full bg-accent mt-2" />
-                        <span className="text-sm">Validate career choices through micro-experiments</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-            
-            <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '400ms' }}>
-              <CardHeader className="bg-gradient-to-r from-accent/10 to-primary/10 border-b">
-                <CardTitle className="text-xl flex items-center gap-3">
-                  <div className="w-3 h-3 rounded-full bg-gradient-to-r from-accent to-primary" />
-                  AI Career Counselor
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="h-80 overflow-y-auto border rounded-lg p-4 mb-4 space-y-3 bg-background/50 backdrop-blur-sm">
-                  {chat.length === 0 && (
-                    <div className="text-center py-8">
-                      <div className="w-12 h-12 rounded-full bg-gradient-to-r from-primary to-accent flex items-center justify-center mx-auto mb-3">
-                        <span className="text-2xl">🤖</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground">Ask me anything about your results, career paths, or next steps!</p>
-                    </div>
-                  )}
-                  {chat.map((m, i) => (
-                    <div key={i} className={`flex gap-3 ${m.from === "ai" ? "justify-start" : "justify-end"}`}>
-                      <div className={`max-w-[80%] p-3 rounded-lg ${
-                        m.from === "ai" 
-                          ? "bg-primary/10 text-primary border border-primary/20" 
-                          : "bg-accent/10 text-accent border border-accent/20"
-                      }`}>
-                        <div className="text-xs font-semibold mb-1 opacity-60">
-                          {m.from === "ai" ? "AI Counselor" : "You"}
-                        </div>
-                        <div className="text-sm">{m.text}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <Input 
-                    value={chatInput} 
-                    onChange={(e) => setChatInput(e.target.value)} 
-                    placeholder="Ask about your career path..."
-                    className="flex-1"
-                    onKeyPress={(e) => e.key === 'Enter' && sendChat()}
-                  />
-                  <Button 
-                    onClick={sendChat}
-                    className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
+            {/* PROGRESS TAB */}
+            <TabsContent value="progress" className="space-y-6">
+                 {history.length < 2 ? (
+                     <Card className="text-center py-12">
+                         <CardContent>
+                             <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4"/>
+                             <h3 className="text-lg font-medium">Not enough history</h3>
+                             <p className="text-muted-foreground">Complete more assessments to see your progress over time.</p>
+                         </CardContent>
+                     </Card>
+                 ) : (
+                     <div className="space-y-6">
+                         <Card>
+                             <CardHeader><CardTitle>Growth Areas</CardTitle></CardHeader>
+                             <CardContent>
+                                 <p className="text-muted-foreground mb-4">Comparing to your last assessment on {new Date(history[1]?.completed_at).toLocaleDateString()}</p>
+                                 {/* Progress implementation would go here - comparing scores */}
+                                 <div className="text-sm text-gray-500">Feature pending full historical data integration.</div>
+                             </CardContent>
+                         </Card>
+                     </div>
+                 )}
+            </TabsContent>
           </div>
-        </div>
+
+        </Tabs>
       </div>
     </main>
   );

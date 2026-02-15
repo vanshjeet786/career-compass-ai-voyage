@@ -18,9 +18,10 @@ import {
   LAYER_3_QUESTIONS,
   LAYER_4_QUESTIONS,
   LAYER_5_QUESTIONS,
-  LAYER_6_QUESTIONS,
 } from "@/data/questions";
+import { LAYER_6_QUESTIONS } from "@/data/layer6";
 import { PREDETERMINED_SUGGESTIONS } from "@/data/suggestions";
+import { aiService } from "@/services/ai";
 
 const likertOptions = Object.keys(RESPONSE_SCALE);
 
@@ -33,7 +34,16 @@ const getLayerData = (layer: LayerKey) => {
     case 3: return LAYER_3_QUESTIONS;
     case 4: return LAYER_4_QUESTIONS;
     case 5: return LAYER_5_QUESTIONS;
-    case 6: return LAYER_6_QUESTIONS;
+    case 6: {
+        // Adapt Layer 6 structure to match what the UI expects
+        // The UI expects an object where keys are categories and values are string arrays of questions
+        // But we want to use the new structured format from Bolt
+        const adapted: Record<string, string[]> = {};
+        Object.entries(LAYER_6_QUESTIONS.categories).forEach(([cat, questions]) => {
+             adapted[cat] = questions.map(q => q.text);
+        });
+        return adapted;
+    }
   }
 };
 
@@ -157,11 +167,14 @@ const Assessment = () => {
     if (explanations[question]) return;
     setAiLoading(question + 'explain');
     try {
-      const { data, error } = await supabase.functions.invoke("gemini-assist", {
-        body: { mode: 'explain', question, context: { layer, responses } },
-      });
-      if (error) throw error;
-      setExplanations(prev => ({ ...prev, [question]: data.text }));
+      // Replaced gemini-assist with aiService.chatResponse for generic explanations for now
+      // Ideally, we'd have a specific 'explain' method in aiService, but chatResponse is versatile
+      const context = {
+        topStrengths: [],
+        backgroundInfo: {}
+      };
+      const text = await aiService.chatResponse(`Explain why this question is important: "${question}"`, [], context);
+      setExplanations(prev => ({ ...prev, [question]: text }));
     } catch (error: any) {
       toast({ title: "AI error", description: error.message, variant: "destructive" });
     } finally {
@@ -173,11 +186,9 @@ const Assessment = () => {
     setExpandedExplanations(prev => ({ ...prev, [question]: true }));
     setAiLoading(question + 'explain');
     try {
-      const { data, error } = await supabase.functions.invoke("gemini-assist", {
-        body: { mode: 'explain', question, context: { layer, responses } },
-      });
-      if (error) throw error;
-      setExplanations(prev => ({ ...prev, [question + '_expanded']: data.text }));
+       const context = { topStrengths: [], backgroundInfo: {} };
+       const text = await aiService.chatResponse(`Provide a detailed explanation for: "${question}"`, [], context);
+       setExplanations(prev => ({ ...prev, [question + '_expanded']: text }));
     } catch (error: any) {
       toast({ title: "AI error", description: error.message, variant: "destructive" });
     } finally {
@@ -189,31 +200,20 @@ const Assessment = () => {
     if (suggestions[question]) return;
     setAiLoading(question + 'suggest');
     
-    // For Layer 6, call AI first, fallback to predetermined
+    // For Layer 6, call AI first using the new Service
     if (layer === 6) {
       try {
-        const enhancedContext = {
-          layer,
-          userResponses: responses,
-          instruction: "Based on the user's responses from layers 1-5, provide 2-3 specific, actionable suggestions for this question."
-        };
-        
-        const { data, error } = await supabase.functions.invoke("gemini-assist", {
-          body: { mode: 'suggest', question, context: enhancedContext },
-        });
-        
-        if (error) throw error;
-        
-        // Split AI response into multiple suggestions
-        const aiSuggestions = data.text.split('\n').filter(s => s.trim()).slice(0, 3);
-        setSuggestions(prev => ({ ...prev, [question]: aiSuggestions }));
+        const { suggestions: aiSuggestions } = await aiService.suggestAnswer(question, responses);
+        if (aiSuggestions && aiSuggestions.length > 0) {
+            setSuggestions(prev => ({ ...prev, [question]: aiSuggestions }));
+        } else {
+            throw new Error("No suggestions returned");
+        }
       } catch (error: any) {
         // Fallback to predetermined suggestions
         const predetermined = PREDETERMINED_SUGGESTIONS[question];
         if (predetermined) {
           setSuggestions(prev => ({ ...prev, [question]: predetermined }));
-        } else {
-          toast({ title: "AI error", description: error.message, variant: "destructive" });
         }
       }
     } else {
