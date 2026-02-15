@@ -161,7 +161,13 @@ const BackgroundInfo = () => {
             <Button
               type="submit"
               className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 transition-all"
-              disabled={!userType || loading}
+              disabled={
+                !userType ||
+                loading ||
+                (userType === 'professional' && (!formData.jobTitle || !formData.yearsExperience)) ||
+                ((userType === 'student' || userType === 'graduate') && !formData.fieldOfStudy) ||
+                (userType === 'other' && !formData.currentStatus)
+              }
             >
               {loading ? (
                 <Loader2 className="mr-2 h-5 w-5 animate-spin" />
