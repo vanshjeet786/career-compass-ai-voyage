@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,8 +9,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Loader2, HelpCircle, Lightbulb, ArrowRight, ArrowLeft, Plus } from "lucide-react";
-import { useSmartExplanations } from "@/hooks/useSmartExplanations";
-import { useSmartSuggestions } from "@/hooks/useSmartSuggestions";
 import {
   RESPONSE_SCALE,
   LAYER_1_QUESTIONS,
@@ -38,23 +36,54 @@ const getLayerData = (layer: LayerKey) => {
   }
 };
 
-// Function to check if a question is open-ended (Layer 6)
-const isOpenEndedQuestion = (layer: LayerKey, question: string) => {
-  if (layer !== 6) return false;
+/**
+ * Deterministic question type classification for Layer 6.
+ * Returns: 'textarea' | 'likert' | 'multi-career' | 'likert-with-other'
+ */
+const getQuestionType = (question: string, category: string): 'textarea' | 'likert' | 'multi-career' | 'likert-with-other' => {
+  // Multi-input: 3 career interest text boxes
+  if (question.includes("My top 3 career interest areas are")) return 'multi-career';
   
-  // Improved: Use a regex pattern for more flexible matching of open-ended questions
-  const openEndedPatterns = [
-    /\(open-ended\)$/i,
-    /^How would you/i,
-    /^What kind/i,
-    /^What are \d+/i,
-    /^Who can help/i,
-    /^What specific skills/i,
-    /^What timeline/i,
-    /^What fears or doubts/i,
-    /^What kind of support/i,
-  ];
-  return openEndedPatterns.some(pattern => pattern.test(question));
+  // Open-ended: marked with (open-ended)
+  if (question.endsWith("(open-ended)")) return 'textarea';
+  
+  // Passion Practicality: all Likert
+  if (category === "Passion_Practicality") return 'likert';
+  
+  // Career Clustering: Likert (with text box for "Other")
+  if (category === "Career_Clustering") {
+    if (question.startsWith("Other (")) return 'likert-with-other';
+    return 'likert';
+  }
+  
+  // Confidence Check "(1-5)": Likert
+  if (question.includes("(1-5)")) return 'likert';
+  
+  // Action Plan: textarea
+  if (category === "Action_Plan") return 'textarea';
+  
+  // Default for Layer 6: textarea
+  return 'textarea';
+};
+
+/**
+ * Extract all actual question strings from any layer data structure.
+ * Handles both string[] and { instructions, questions } formats.
+ */
+const extractQuestions = (layerData: Record<string, any>): { question: string; category: string }[] => {
+  const result: { question: string; category: string }[] = [];
+  for (const [category, value] of Object.entries(layerData)) {
+    if (Array.isArray(value)) {
+      for (const q of value) {
+        if (typeof q === 'string') result.push({ question: q, category });
+      }
+    } else if (value && typeof value === 'object' && 'questions' in value && Array.isArray(value.questions)) {
+      for (const q of value.questions) {
+        if (typeof q === 'string') result.push({ question: q, category });
+      }
+    }
+  }
+  return result;
 };
 
 // Function to check if career interests have been provided
@@ -81,9 +110,8 @@ const Assessment = () => {
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [suggestions, setSuggestions] = useState<Record<string, string[]>>({});
-  
-  const explanationLoading = aiLoading?.includes('explain') || false;
-  const suggestionLoading = aiLoading?.includes('suggest') || false;
+  const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
+  const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // SEO: title, description, canonical
   useEffect(() => {
@@ -106,16 +134,21 @@ const Assessment = () => {
     canonical.href = window.location.origin + '/assessment';
   }, [layer]);
 
-  // Update check for open-ended questions to include Layer 6 specific questions
-  const isOpenEnded = (question: string) => {
-    return isOpenEndedQuestion(layer, question);
-  };
-
   // Load or create assessment
   useEffect(() => {
     if (!user) return;
     (async () => {
       try {
+        // Check URL for assessment ID from BackgroundInfo
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlAssessmentId = urlParams.get('id');
+        
+        if (urlAssessmentId) {
+          setAssessmentId(urlAssessmentId);
+          setLayer(1);
+          return;
+        }
+
         const { data } = await supabase
           .from("assessments")
           .select("id, current_layer")
@@ -147,6 +180,12 @@ const Assessment = () => {
   const saveResponse = async (questionId: string, value: ResponseValue) => {
     if (!assessmentId) return;
     setResponses((prev) => ({ ...prev, [questionId]: value }));
+    // Clear validation error when user answers
+    setValidationErrors(prev => {
+      const next = new Set(prev);
+      next.delete(questionId);
+      return next;
+    });
     try {
       await supabase.from("assessment_responses").insert({
         assessment_id: assessmentId,
@@ -163,12 +202,7 @@ const Assessment = () => {
     if (explanations[question]) return;
     setAiLoading(question + 'explain');
     try {
-      // Replaced gemini-assist with aiService.chatResponse for generic explanations for now
-      // Ideally, we'd have a specific 'explain' method in aiService, but chatResponse is versatile
-      const context = {
-        topStrengths: [],
-        backgroundInfo: {}
-      };
+      const context = { topStrengths: [], backgroundInfo: {} };
       const text = await aiService.chatResponse(`Explain why this question is important: "${question}"`, [], context);
       setExplanations(prev => ({ ...prev, [question]: text }));
     } catch (error: any) {
@@ -182,9 +216,9 @@ const Assessment = () => {
     setExpandedExplanations(prev => ({ ...prev, [question]: true }));
     setAiLoading(question + 'explain');
     try {
-       const context = { topStrengths: [], backgroundInfo: {} };
-       const text = await aiService.chatResponse(`Provide a detailed explanation for: "${question}"`, [], context);
-       setExplanations(prev => ({ ...prev, [question + '_expanded']: text }));
+      const context = { topStrengths: [], backgroundInfo: {} };
+      const text = await aiService.chatResponse(`Provide a detailed explanation for: "${question}"`, [], context);
+      setExplanations(prev => ({ ...prev, [question + '_expanded']: text }));
     } catch (error: any) {
       toast({ title: "AI error", description: error.message, variant: "destructive" });
     } finally {
@@ -196,35 +230,15 @@ const Assessment = () => {
     if (suggestions[question]) return;
     setAiLoading(question + 'suggest');
     
-    // Use predetermined suggestions first, then AI if requested via dedicated button
-    // But here we set suggestions on click.
-    // If it's layer 6, we might want to try AI suggestions if no predetermined ones exist.
-
-    // Original logic:
-    // For layers 1-5, use predetermined suggestions only
     const predetermined = PREDETERMINED_SUGGESTIONS[question];
     if (predetermined) {
       setSuggestions(prev => ({ ...prev, [question]: predetermined }));
     } else if (layer === 6) {
-       // Try AI if no predetermined
-       try {
-        // We use the new aiService but pointing to Gemini now
-        // But the user asked to revert treatment of Layer 6.
-        // The original code likely just used PREDETERMINED_SUGGESTIONS or failed silently.
-        // However, since we want to keep the FEATURE of AI suggestions but REVERT the LOGIC to Gemini...
-        // And we just updated aiService to use Gemini...
-        // We can just call aiService.suggestAnswer here?
-        // Or should we revert to `supabase.functions.invoke("gemini-assist")` directly as it was originally?
-
-        // The user said: "Revert everything that you changed regarding the AI and the treatment of layer 6."
-        // This implies going back to the original implementation which likely didn't have auto-suggestions for Layer 6
-        // OR it used `gemini-assist` in a specific way.
-
-        // Let's stick to the PREDETERMINED logic primarily, and only use AI if explicitly requested via the "Suggest" button (handleAISuggestions).
-        // So here, if no predetermined, we do nothing (or show error/fallback).
-       } catch (e) {
-         console.error(e);
-       }
+      try {
+        // Fallback: no predetermined suggestions available
+      } catch (e) {
+        console.error(e);
+      }
     }
     
     setAiLoading(null);
@@ -234,12 +248,11 @@ const Assessment = () => {
     setShowAISuggestions(prev => ({ ...prev, [question]: true }));
     setAiLoading(question + 'ai_suggest');
     try {
-      // Use original gemini-assist call style
       const { data, error } = await supabase.functions.invoke("gemini-assist", {
         body: { mode: 'suggest', question, context: { layer, responses } },
       });
       if (error) throw error;
-      const aiSuggestions = data.text.split('\n').filter(s => s.trim()).slice(0, 3);
+      const aiSuggestions = data.text.split('\n').filter((s: string) => s.trim()).slice(0, 3);
       setSuggestions(prev => ({ 
         ...prev, 
         [question]: [...(prev[question] || []), ...aiSuggestions] 
@@ -254,44 +267,40 @@ const Assessment = () => {
   const nextLayer = async () => {
     if (!assessmentId) return;
 
-    // Validate mandatory questions
-    const currentQuestions = Object.values(layerData).flat();
-    // Flatten structure for complex layers (like clustering)
-    let actualQuestions: string[] = [];
-    if (layer === 6) {
-        // Layer 6 is a mix, handle if needed, but standard logic handles it if layerData is just strings
-        actualQuestions = currentQuestions as string[];
-    } else {
-        actualQuestions = Object.values(layerData).flatMap(val => {
-            if (typeof val === 'object' && !Array.isArray(val) && 'questions' in val) {
-                return (val as any).questions;
-            }
-            return val;
-        }) as string[];
+    // Extract all questions properly (handles both arrays and {instructions, questions})
+    const allQuestions = extractQuestions(layerData);
+    
+    const missing: string[] = [];
+    for (const { question: q, category } of allQuestions) {
+      // Skip Passion_Practicality if no career interests
+      if (category === "Passion_Practicality" && !hasCareerInterests(responses)) continue;
+
+      const response = responses[q];
+      if (!response) { missing.push(q); continue; }
+      if ('value' in response) continue; // Likert answered
+      if ('text' in response && response.text.trim()) continue; // Open-ended answered
+      if ('career1' in response && (response.career1 || response.career2 || response.career3)) continue;
+      if ('customText' in response) continue; // Other option with radio checked
+      missing.push(q);
     }
-
-    const missing = actualQuestions.filter(q => {
-        // Passion practicality is optional if no careers selected
-        if (q.includes("Passion_Practicality") && !hasCareerInterests(responses)) return false;
-
-        const response = responses[q];
-        if (!response) return true;
-        if ('value' in response) return false; // Likert
-        if ('text' in response) return !response.text.trim(); // Open ended
-        if ('career1' in response) return !response.career1; // Career clustering
-        if ('customText' in response) return false; // Other option (radio is checked so response exists)
-        return true;
-    });
 
     if (missing.length > 0) {
-        toast({
-            title: "Please complete all questions",
-            description: `You have ${missing.length} unanswered questions in this section.`,
-            variant: "destructive"
-        });
-        return;
+      // Set validation errors and scroll to first missing
+      setValidationErrors(new Set(missing));
+      const firstMissing = missing[0];
+      const ref = questionRefs.current[firstMissing];
+      if (ref) {
+        ref.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      toast({
+        title: "Please complete all questions",
+        description: `You have ${missing.length} unanswered question${missing.length > 1 ? 's' : ''}.`,
+        variant: "destructive"
+      });
+      return;
     }
 
+    setValidationErrors(new Set());
     const next = (layer + 1) as LayerKey;
     const done = next > 6;
     try {
@@ -313,11 +322,110 @@ const Assessment = () => {
     const prev = (layer - 1) as LayerKey;
     if (prev < 1) return;
     setLayer(prev);
+    setValidationErrors(new Set());
     if (assessmentId) await supabase.from("assessments").update({ current_layer: prev }).eq("id", assessmentId);
   };
 
   if (loading) return <div className="min-h-screen grid place-items-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   if (!user) return <Navigate to="/auth" replace />;
+
+  // Render a question input based on its type
+  const renderQuestionInput = (q: string, category: string) => {
+    if (layer <= 5) {
+      // Layers 1-5: all Likert
+      return (
+        <RadioGroup
+          value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
+          onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
+          className="grid grid-cols-1 md:grid-cols-5 gap-3"
+        >
+          {likertOptions.map((opt) => (
+            <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
+              <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
+              <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
+            </div>
+          ))}
+        </RadioGroup>
+      );
+    }
+
+    // Layer 6: deterministic type
+    const qType = getQuestionType(q, category);
+
+    switch (qType) {
+      case 'multi-career':
+        return (
+          <div className="grid gap-4">
+            {['career1', 'career2', 'career3'].map((field, idx) => (
+              <div className="space-y-2" key={field}>
+                <Label htmlFor={`${q}-${field}`} className="text-sm font-medium">Career Interest {idx + 1}</Label>
+                <input
+                  id={`${q}-${field}`}
+                  type="text"
+                  placeholder={`Enter career interest ${idx + 1}...`}
+                  value={(responses[q] as any)?.[field] || ""}
+                  onChange={(e) => {
+                    const current = (responses[q] as { career1?: string; career2?: string; career3?: string }) || {};
+                    saveResponse(q, { ...current, [field]: e.target.value });
+                  }}
+                  className="w-full px-3 py-2 border border-border/50 rounded-lg bg-background text-foreground focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                />
+              </div>
+            ))}
+          </div>
+        );
+
+      case 'textarea':
+        return (
+          <Textarea
+            placeholder="Share your thoughts, experiences, and insights..."
+            value={responses[q] && 'text' in responses[q] ? (responses[q] as { text: string }).text : ""}
+            onChange={(e) => saveResponse(q, { text: e.target.value })}
+            className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
+          />
+        );
+
+      case 'likert':
+        return (
+          <RadioGroup
+            value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
+            onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
+            className="grid grid-cols-1 md:grid-cols-5 gap-3"
+          >
+            {likertOptions.map((opt) => (
+              <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
+                <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
+                <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        );
+
+      case 'likert-with-other':
+        return (
+          <div className="space-y-4">
+            <RadioGroup
+              value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
+              onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
+              className="grid grid-cols-1 md:grid-cols-5 gap-3"
+            >
+              {likertOptions.map((opt) => (
+                <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
+                  <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
+                  <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
+                </div>
+              ))}
+            </RadioGroup>
+            <Textarea
+              placeholder="Please specify your own career cluster..."
+              value={responses[q] && 'customText' in responses[q] ? (responses[q] as { customText: string }).customText : ""}
+              onChange={(e) => saveResponse(q, { ...responses[q], customText: e.target.value })}
+              className="min-h-[80px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
+            />
+          </div>
+        );
+    }
+  };
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-background via-background to-accent/5">
@@ -342,9 +450,9 @@ const Assessment = () => {
 
         <div className="space-y-8">
           {Object.entries(layerData).map(([category, questions], catIdx) => {
-            const isCareerClustering = category === "Career_Clustering" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
-            const isPassionPracticality = category === "Passion_Practicality" && typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
-            const actualQuestions = (isCareerClustering || isPassionPracticality) ? (questions as any).questions : questions as string[];
+            const hasInstructions = typeof questions === 'object' && !Array.isArray(questions) && 'instructions' in questions;
+            const actualQuestions: string[] = hasInstructions ? (questions as any).questions : questions as string[];
+            const isPassionPracticality = category === "Passion_Practicality";
 
             // Skip Passion_Practicality section if no career interests were provided
             if (isPassionPracticality && !hasCareerInterests(responses)) {
@@ -358,7 +466,7 @@ const Assessment = () => {
                     <div className="w-2 h-2 rounded-full bg-gradient-to-r from-primary to-accent" />
                     {category.replace(/_/g, ' ')}
                   </CardTitle>
-                 {(isCareerClustering || isPassionPracticality) && (
+                  {hasInstructions && (
                     <div className="text-sm text-muted-foreground mt-2 leading-relaxed">
                       <p className="mb-2">
                         <strong>Instructions:</strong> {(questions as any).instructions}
@@ -382,19 +490,26 @@ const Assessment = () => {
                   )}
                 </CardHeader>
                 <CardContent className="space-y-6 p-6">
-                  {actualQuestions.map((q, idx) => {
-                    const isOtherOption = q.startsWith("Other (");
-                    const showSuggestButton = isOpenEndedQuestion(layer, q) || isCareerClustering;
-                    const isMultiCareerInput = q.includes("My top 3 career interest areas are");
+                  {actualQuestions.map((q: string, idx: number) => {
+                    const isOpenEnded = layer === 6 && (getQuestionType(q, category) === 'textarea');
+                    const showSuggestButton = isOpenEnded || category === "Career_Clustering";
+                    const hasError = validationErrors.has(q);
 
                     return (
-                      <div key={q} className="group rounded-xl border border-border/50 p-6 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50">
+                      <div
+                        key={q}
+                        ref={(el) => { questionRefs.current[q] = el; }}
+                        className={`group rounded-xl border p-6 hover:shadow-md transition-all duration-300 bg-background/50 ${
+                          hasError ? 'border-destructive/70 ring-2 ring-destructive/20' : 'border-border/50 hover:border-primary/20'
+                        }`}
+                      >
                         <div className="flex items-start justify-between gap-4 mb-4">
                           <p className="font-medium flex-1 text-foreground group-hover:text-primary transition-colors">
                             <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-semibold mr-3">
                               {idx + 1}
                             </span>
                             {q}
+                            {hasError && <span className="text-destructive text-xs ml-2">* Required</span>}
                           </p>
                           <div className="flex gap-2">
                             <Button 
@@ -407,110 +522,25 @@ const Assessment = () => {
                               Explain
                             </Button>
                             {showSuggestButton && (
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              onClick={() => handleSuggestions(q)} 
-                              disabled={aiLoading === q + 'suggest'}
-                              className="px-4 py-2 rounded-full hover:bg-transparent hover:text-accent hover:border-accent/50 transition-all duration-200"
-                            >
-                              {aiLoading === q + 'suggest' ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <Lightbulb className="h-4 w-4 mr-2" />
-                              )}
-                              Suggest
-                            </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => handleSuggestions(q)} 
+                                disabled={aiLoading === q + 'suggest'}
+                                className="px-4 py-2 rounded-full hover:bg-transparent hover:text-accent hover:border-accent/50 transition-all duration-200"
+                              >
+                                {aiLoading === q + 'suggest' ? (
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                ) : (
+                                  <Lightbulb className="h-4 w-4 mr-2" />
+                                )}
+                                Suggest
+                              </Button>
                             )}
                           </div>
                         </div>
 
-                        {layer <= 5 || (!isCareerClustering && !isOpenEnded(q)) ? (
-                          layer <= 5 ? (
-                            <div className="space-y-3">
-                              <RadioGroup
-                                value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
-                                onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
-                                className="grid grid-cols-1 md:grid-cols-5 gap-3"
-                              >
-                                {likertOptions.map((opt) => (
-                                  <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
-                                    <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
-                                    <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
-                                  </div>
-                                ))}
-                              </RadioGroup>
-                            </div>
-                          ) : isMultiCareerInput ? (
-                            <div className="space-y-4">
-                              <div className="grid gap-4">
-                                {['career1', 'career2', 'career3'].map((field, idx) => (
-                                  <div className="space-y-2" key={field}>
-                                    <Label htmlFor={`${q}-${field}`} className="text-sm font-medium">Career Interest {idx + 1}</Label>
-                                    <input
-                                      id={`${q}-${field}`}
-                                      type="text"
-                                      placeholder={`Enter career interest ${idx + 1}...`}
-                                      value={(responses[q] as any)?.[field] || ""}
-                                      onChange={(e) => {
-                                        const current = responses[q] as { career1?: string; career2?: string; career3?: string } || {};
-                                        saveResponse(q, { ...current, [field]: e.target.value });
-                                      }}
-                                      className="w-full px-3 py-2 border border-border/50 rounded-lg focus:border-primary/50 focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                                    />
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              <Textarea
-                                placeholder="Share your thoughts, experiences, and insights..."
-                                value={responses[q] && 'text' in responses[q] ? (responses[q] as { text: string }).text : ""}
-                                onChange={(e) => saveResponse(q, { text: e.target.value })}
-                                className="min-h-[120px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
-                              />
-                            </div>
-                          )
-                        ) : (isPassionPracticality) ? (
-                          <div className="space-y-3">
-                            <RadioGroup
-                              value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
-                              onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
-                              className="grid grid-cols-1 md:grid-cols-5 gap-3"
-                            >
-                              {likertOptions.map((opt) => (
-                                <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
-                                  <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
-                                  <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
-                                </div>
-                              ))}
-                            </RadioGroup>
-                          </div>
-                        ) : (
-                          <div className="space-y-4">
-                            <RadioGroup
-                              value={responses[q] && 'label' in responses[q] ? (responses[q] as { label: string }).label : ""}
-                              onValueChange={(val) => saveResponse(q, { label: val, value: RESPONSE_SCALE[val] })}
-                              className="grid grid-cols-1 md:grid-cols-5 gap-3"
-                            >
-                              {likertOptions.map((opt) => (
-                                <div className="flex items-center space-x-3 p-3 rounded-lg border border-border/50 hover:border-primary/30 hover:bg-primary/5 transition-all duration-200 cursor-pointer" key={opt}>
-                                  <RadioGroupItem id={`${q}-${opt}`} value={opt} className="text-primary" />
-                                  <Label htmlFor={`${q}-${opt}`} className="flex-1 cursor-pointer font-medium">{opt}</Label>
-                                </div>
-                              ))}
-                            </RadioGroup>
-                            {isOtherOption && (
-                              <Textarea
-                                placeholder="Please specify your own career cluster..."
-                                value={responses[q] && 'customText' in responses[q] ? (responses[q] as { customText: string }).customText : ""}
-                                onChange={(e) => saveResponse(q, { ...responses[q], customText: e.target.value })}
-                                className="min-h-[80px] resize-none border-border/50 focus:border-primary/50 focus:ring-primary/20"
-                              />
-                            )}
-                          </div>
-                        )}
+                        {renderQuestionInput(q, category)}
 
                         {(explanations[q] || suggestions[q]) && (
                           <div className="mt-4 space-y-3 animate-fade-in">
@@ -522,27 +552,27 @@ const Assessment = () => {
                                     Why it matters:
                                   </span>
                                   <span className="text-muted-foreground mb-3 block">{explanations[q]}</span>
-                                   {!expandedExplanations[q] && layer <= 5 && (
-                                     <Button 
-                                       variant="ghost" 
-                                       size="sm"
-                                       onClick={() => handleExpandedExplanation(q)}
-                                       disabled={aiLoading === q + 'explain'}
-                                       className="px-4 py-2 rounded-full hover:bg-transparent hover:text-primary hover:border-primary/30 transition-all duration-200 border border-transparent"
-                                     >
-                                       {aiLoading === q + 'explain' ? (
-                                         <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Loading...</>
-                                       ) : (
-                                         <><Plus className="h-3 w-3 mr-2" /> Explain More</>
-                                       )}
-                                     </Button>
-                                   )}
-                                   {explanations[q + '_expanded'] && (
-                                     <div className="mt-3 p-3 rounded-lg bg-primary/3 border border-primary/10">
-                                       <span className="font-semibold text-primary text-xs block mb-2">Detailed Explanation:</span>
-                                       <span className="text-muted-foreground text-sm">{explanations[q + '_expanded']}</span>
-                                     </div>
-                                   )}
+                                  {!expandedExplanations[q] && layer <= 5 && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => handleExpandedExplanation(q)}
+                                      disabled={aiLoading === q + 'explain'}
+                                      className="px-4 py-2 rounded-full hover:bg-transparent hover:text-primary hover:border-primary/30 transition-all duration-200 border border-transparent"
+                                    >
+                                      {aiLoading === q + 'explain' ? (
+                                        <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Loading...</>
+                                      ) : (
+                                        <><Plus className="h-3 w-3 mr-2" /> Explain More</>
+                                      )}
+                                    </Button>
+                                  )}
+                                  {explanations[q + '_expanded'] && (
+                                    <div className="mt-3 p-3 rounded-lg bg-primary/3 border border-primary/10">
+                                      <span className="font-semibold text-primary text-xs block mb-2">Detailed Explanation:</span>
+                                      <span className="text-muted-foreground text-sm">{explanations[q + '_expanded']}</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -554,30 +584,30 @@ const Assessment = () => {
                                     Smart Suggestions:
                                   </span>
                                   <div className="space-y-2">
-                                    {suggestions[q].map((suggestion: string, idx: number) => (
-                                      <div key={idx} className="flex items-start gap-2 p-2 rounded border border-accent/10 bg-background/50">
+                                    {suggestions[q].map((suggestion: string, sIdx: number) => (
+                                      <div key={sIdx} className="flex items-start gap-2 p-2 rounded border border-accent/10 bg-background/50">
                                         <div className="w-5 h-5 rounded-full bg-accent/20 text-accent text-xs flex items-center justify-center font-semibold flex-shrink-0 mt-0.5">
-                                          {idx + 1}
+                                          {sIdx + 1}
                                         </div>
                                         <span className="text-muted-foreground text-sm">{suggestion}</span>
                                       </div>
                                     ))}
                                   </div>
-                                   {!showAISuggestions[q] && layer === 6 && (
-                                     <Button 
-                                       variant="ghost" 
-                                       size="sm"
-                                       onClick={() => handleAISuggestions(q)}
-                                       disabled={aiLoading === q + 'ai_suggest'}
-                                       className="px-4 py-2 rounded-full hover:bg-transparent hover:text-accent hover:border-accent/30 transition-all duration-200 border border-transparent mt-3"
-                                     >
-                                       {aiLoading === q + 'ai_suggest' ? (
-                                         <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Getting AI suggestions...</>
-                                       ) : (
-                                         <><Plus className="h-3 w-3 mr-2" /> Get AI Suggestions</>
-                                       )}
-                                     </Button>
-                                   )}
+                                  {!showAISuggestions[q] && layer === 6 && (
+                                    <Button 
+                                      variant="ghost" 
+                                      size="sm"
+                                      onClick={() => handleAISuggestions(q)}
+                                      disabled={aiLoading === q + 'ai_suggest'}
+                                      className="px-4 py-2 rounded-full hover:bg-transparent hover:text-accent hover:border-accent/30 transition-all duration-200 border border-transparent mt-3"
+                                    >
+                                      {aiLoading === q + 'ai_suggest' ? (
+                                        <><Loader2 className="h-3 w-3 mr-2 animate-spin" /> Getting AI suggestions...</>
+                                      ) : (
+                                        <><Plus className="h-3 w-3 mr-2" /> Get AI Suggestions</>
+                                      )}
+                                    </Button>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -619,9 +649,7 @@ const Assessment = () => {
             className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
           >
             {layer < 6 ? (
-              <>
-                Next <ArrowRight className="h-4 w-4 ml-2" />
-              </>
+              <>Next <ArrowRight className="h-4 w-4 ml-2" /></>
             ) : (
               <>Finish Assessment</>
             )}

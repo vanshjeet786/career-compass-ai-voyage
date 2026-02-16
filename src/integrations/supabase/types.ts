@@ -89,6 +89,7 @@ export type Database = {
       }
       assessments: {
         Row: {
+          background_info: Json | null
           completed_at: string | null
           created_at: string | null
           current_layer: number | null
@@ -98,6 +99,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          background_info?: Json | null
           completed_at?: string | null
           created_at?: string | null
           current_layer?: number | null
@@ -107,6 +109,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          background_info?: Json | null
           completed_at?: string | null
           created_at?: string | null
           current_layer?: number | null

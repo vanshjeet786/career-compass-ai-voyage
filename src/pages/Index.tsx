@@ -46,11 +46,18 @@ const Index = () => {
           {user ? (
             <div className="space-y-4 animate-bounce-in" style={{ animationDelay: '0.4s' }}>
               <p className="text-lg text-foreground">Welcome back, {user.email}!</p>
-              <Button asChild size="lg" className="text-lg px-8 py-4 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl animate-float">
-                <Link to="/assessment">
-                  Continue Your Journey <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
+              <div className="flex gap-4 justify-center flex-wrap">
+                <Button asChild size="lg" className="text-lg px-8 py-4 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl animate-float">
+                  <Link to="/assessment">
+                    Continue Assessment <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" size="lg" className="text-lg px-8 py-4 transform hover:scale-105 transition-all duration-300">
+                  <Link to="/background-info">
+                    New Assessment <ArrowRight className="ml-2 h-5 w-5" />
+                  </Link>
+                </Button>
+              </div>
             </div>
           ) : (
             <Button asChild size="lg" className="text-lg px-8 py-4 bg-gradient-to-r from-primary to-secondary hover:from-primary/90 hover:to-secondary/90 transform hover:scale-105 transition-all duration-300 shadow-lg hover:shadow-xl animate-bounce-in animate-float" style={{ animationDelay: '0.4s' }}>
