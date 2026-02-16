@@ -1,0 +1,1 @@
+ALTER TABLE public.assessments ADD COLUMN background_info JSONB DEFAULT NULL;
