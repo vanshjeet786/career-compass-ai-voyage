@@ -2,3 +2,6 @@ project_id = "jytncxnylnkpdvwquxzv"
 
 [functions.gemini-assist]
 verify_jwt = false
+
+[functions.ai-career-chat]
+verify_jwt = false
