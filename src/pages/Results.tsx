@@ -1,17 +1,74 @@
-
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, Navigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, Navigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/components/ui/use-toast";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from "recharts";
-import { Loader2, Download, TrendingUp, BarChart3, Activity, PieChart, Lightbulb, Target } from "lucide-react";
+import {
+  ResponsiveContainer,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar,
+  Tooltip,
+  BarChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Bar,
+} from "recharts";
+import {
+  Loader2,
+  Download,
+  Sparkles,
+  TrendingUp,
+  Compass,
+  ArrowRight,
+  Brain,
+  Lightbulb,
+  Target,
+  CheckCircle2,
+} from "lucide-react";
 import { aiService } from "@/services/ai";
 import { useAssessmentHistory } from "@/hooks/useAssessmentHistory";
 import { generatePDFReport } from "@/utils/pdfGenerator";
+
+type ResponseRow = {
+  question_id: string;
+  layer_number: number;
+  response_value: {
+    value?: number;
+    text?: string;
+    label?: string;
+    customText?: string;
+    career1?: string;
+    career2?: string;
+    career3?: string;
+  };
+};
+
+type AssessmentRecord = {
+  id: string;
+  background_info?: Record<string, unknown> | null;
+};
+
+type Recommendation = {
+  name?: string;
+  nextSteps?: string[];
+  layer6Match?: string;
+  pros?: string[];
+  cons?: string[];
+};
+
+type EnhancedResults = {
+  insights?: string;
+  recommendations?: Recommendation[];
+  careerFitData?: { career: string; fitScore: number }[];
+};
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -22,30 +79,35 @@ const Results = () => {
   const { toast } = useToast();
   const q = useQuery();
   const assessId = q.get("assess");
-  
-  const [activeTab, setActiveTab] = useState("overview");
-  const [rows, setRows] = useState<any[]>([]);
-  const [assessment, setAssessment] = useState<any>(null);
-  const [aiEnhanced, setAiEnhanced] = useState<any>(null);
+
+  const [rows, setRows] = useState<ResponseRow[]>([]);
+  const [assessment, setAssessment] = useState<AssessmentRecord | null>(null);
+  const [aiEnhanced, setAiEnhanced] = useState<EnhancedResults | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
-  const reportRef = useRef<HTMLDivElement>(null);
-  const { assessments: history, getProgressAnalysis } = useAssessmentHistory();
+  const { assessments: history } = useAssessmentHistory();
 
-  // Load Assessment Data
+  useEffect(() => {
+    document.title = "Career Compass Results — Your Career Blueprint";
+  }, []);
+
   useEffect(() => {
     if (!assessId) return;
     (async () => {
-      // 1. Fetch metadata (background info, etc)
-      const { data: assessData } = await supabase
+      const { data: assessData, error: assessError } = await supabase
         .from("assessments")
-        .select("*")
+        .select("id, background_info")
         .eq("id", assessId)
         .single();
-      setAssessment(assessData);
 
-      // 2. Fetch responses
+      if (assessError) {
+        toast({ title: "Error", description: assessError.message, variant: "destructive" });
+        return;
+      }
+
+      setAssessment(assessData as AssessmentRecord);
+
       const { data, error } = await supabase
         .from("assessment_responses")
         .select("question_id, response_value, layer_number")
@@ -55,264 +117,367 @@ const Results = () => {
       if (error) {
         toast({ title: "Error", description: error.message, variant: "destructive" });
       } else {
-        setRows(data || []);
+        setRows((data || []) as ResponseRow[]);
       }
     })();
-  }, [assessId]);
+  }, [assessId, toast]);
 
-  // Calculate Scores
-  const catAverages = useMemo(() => {
-    const map: Record<string, { sum: number; count: number }> = {};
-    for (const r of rows) {
-      if (r.response_value && 'value' in r.response_value && typeof r.response_value.value === "number") {
-        const cat = r.question_id.split(":")[0] || r.question_id;
-        if (!map[cat]) map[cat] = { sum: 0, count: 0 };
-        map[cat].sum += r.response_value.value;
-        map[cat].count += 1;
-      }
+  const scoredCategories = useMemo(() => {
+    const aggregate: Record<string, { sum: number; count: number }> = {};
+
+    for (const row of rows) {
+      const value = row.response_value?.value;
+      if (typeof value !== "number") continue;
+
+      const categoryKey = row.question_id.split(":")[0] || row.question_id;
+      if (!aggregate[categoryKey]) aggregate[categoryKey] = { sum: 0, count: 0 };
+      aggregate[categoryKey].sum += value;
+      aggregate[categoryKey].count += 1;
     }
-    return Object.entries(map).map(([name, v]) => ({ name, score: Number((v.sum / v.count).toFixed(2)) }));
+
+    return Object.entries(aggregate)
+      .map(([name, data]) => ({ name, score: Number((data.sum / data.count).toFixed(2)) }))
+      .sort((a, b) => b.score - a.score);
   }, [rows]);
 
-  // Generate AI Enhanced Results
+  const overallScore = useMemo(() => {
+    if (scoredCategories.length === 0) return 0;
+    const total = scoredCategories.reduce((acc, item) => acc + item.score, 0);
+    return Number((total / scoredCategories.length).toFixed(2));
+  }, [scoredCategories]);
+
+  const topStrengths = useMemo(() => scoredCategories.slice(0, 3), [scoredCategories]);
+  const growthThemes = useMemo(() => scoredCategories.slice(-3).reverse(), [scoredCategories]);
+
   useEffect(() => {
-    if (rows.length > 0 && assessment && !aiEnhanced && !aiLoading) {
-      setAiLoading(true);
-      const scores = catAverages.reduce((acc, curr) => ({ ...acc, [curr.name]: curr.score }), {});
+    if (rows.length === 0 || !assessment || aiEnhanced || aiLoading) return;
 
-      // Filter for open-ended (Layer 6)
-      const layer6 = rows
-        .filter(r => r.layer_number === 6)
-        .map(r => ({ question: r.question_id, response: r.response_value?.text || "" }));
+    setAiLoading(true);
+    const scores = scoredCategories.reduce((acc, curr) => ({ ...acc, [curr.name]: curr.score }), {} as Record<string, number>);
 
-      aiService.generateEnhancedResults(scores, layer6, assessment.background_info)
-        .then(res => setAiEnhanced(res))
-        .catch(err => console.error(err))
-        .finally(() => setAiLoading(false));
+    const layer6Responses = rows
+      .filter((row) => row.layer_number === 6)
+      .map((row) => ({ question: row.question_id, response: row.response_value?.text || "" }));
+
+    aiService
+      .generateEnhancedResults(scores, layer6Responses, assessment.background_info)
+      .then((res) => setAiEnhanced(res as EnhancedResults))
+      .catch((err) => {
+        console.error(err);
+        toast({
+          title: "AI insight unavailable",
+          description: "We couldn't generate enhanced interpretation right now.",
+          variant: "destructive",
+        });
+      })
+      .finally(() => setAiLoading(false));
+  }, [rows, assessment, aiEnhanced, aiLoading, scoredCategories, toast]);
+
+  const careerMatches = useMemo(() => {
+    if (aiEnhanced?.careerFitData?.length) {
+      return [...aiEnhanced.careerFitData]
+        .sort((a, b) => b.fitScore - a.fitScore)
+        .slice(0, 5)
+        .map((item) => ({ name: item.career, fitScore: Number(item.fitScore.toFixed(1)) }));
     }
-  }, [rows, assessment]);
 
-  const progressAnalysis = useMemo(() => {
-      if (!assessId || history.length < 2) return null;
-      // Find the ID of the assessment we are viewing. If we are viewing the latest, it's easy.
-      // But we might be viewing an old one.
-      // Currently assuming we view the one from URL.
-      return getProgressAnalysis(assessId); // This needs to be implemented in the hook to take an ID
+    if (aiEnhanced?.recommendations?.length) {
+      return aiEnhanced.recommendations.slice(0, 5).map((rec, idx) => ({
+        name: rec.name || `Career Path ${idx + 1}`,
+        fitScore: Number((4.6 - idx * 0.2).toFixed(1)),
+      }));
+    }
+
+    return [];
+  }, [aiEnhanced]);
+
+  const recentComparisonText = useMemo(() => {
+    if (!assessId || history.length < 2) return "Complete another assessment to unlock trend comparisons.";
+    const completed = history[1]?.completed_at;
+    if (!completed) return "Historical comparison will be available after your next completed assessment.";
+    return `Your profile can now be compared against your previous run from ${new Date(completed).toLocaleDateString()}.`;
   }, [assessId, history]);
-
 
   const handleDownloadPDF = async () => {
     setGeneratingPdf(true);
     try {
-        await generatePDFReport('report-container', {
-            userName: user?.email || "User", // Ideally full name
-            scores: catAverages.reduce((acc, curr) => ({ ...acc, [curr.name]: curr.score }), {}),
-            insights: aiEnhanced?.insights || "Analysis pending...",
-            topStrengths: catAverages.sort((a,b) => b.score - a.score).slice(0,3).map(c => c.name)
-        });
-        toast({ title: "Report Downloaded", description: "Your comprehensive career report is ready." });
-    } catch (e) {
-        toast({ title: "Download Failed", description: "Could not generate PDF.", variant: "destructive" });
+      await generatePDFReport("results-report", {
+        userName: user?.email || "User",
+        scores: scoredCategories.reduce((acc, item) => ({ ...acc, [item.name]: item.score }), {} as Record<string, number>),
+        insights: aiEnhanced?.insights || "Your interpretation is being generated.",
+        topStrengths: topStrengths.map((item) => item.name),
+      });
+
+      toast({ title: "Report downloaded", description: "Your career blueprint PDF is ready." });
+    } catch {
+      toast({ title: "Download failed", description: "Could not generate PDF.", variant: "destructive" });
     } finally {
-        setGeneratingPdf(false);
+      setGeneratingPdf(false);
     }
   };
 
-  if (loading) return <div className="min-h-screen grid place-items-center"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  if (loading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
   if (!user) return <Navigate to="/auth" replace />;
 
+  if (!assessId) {
+    return (
+      <main className="min-h-screen grid place-items-center px-4 text-center">
+        <Card className="max-w-xl">
+          <CardHeader>
+            <CardTitle className="text-2xl">No assessment selected</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-muted-foreground">We could not find an assessment id in the URL.</p>
+            <Button asChild>
+              <Link to="/assessment">Go to Assessment</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
   return (
-    <main className="min-h-screen bg-gray-50/50 pb-20">
-      <div className="container py-8 max-w-7xl">
+    <main className="min-h-screen bg-gradient-to-b from-background to-muted/30 pb-16">
+      <section className="container max-w-7xl py-10 space-y-8" id="results-report">
+        <Card className="overflow-hidden border-primary/20">
+          <div className="bg-gradient-to-r from-primary/15 via-secondary/10 to-accent/15 p-8 md:p-10">
+            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
+              <div className="space-y-4">
+                <Badge className="bg-primary/20 text-primary hover:bg-primary/20">Career Blueprint</Badge>
+                <h1 className="text-3xl md:text-5xl font-bold tracking-tight">Your Results Interpretation</h1>
+                <p className="text-muted-foreground max-w-2xl text-base md:text-lg">
+                  We translated your full assessment into a practical career narrative so you can focus on decisions, not raw scores.
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button variant="outline" onClick={() => window.print()}>
+                  Print
+                </Button>
+                <Button onClick={handleDownloadPDF} disabled={generatingPdf}>
+                  {generatingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                  Download PDF
+                </Button>
+              </div>
+            </div>
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-10">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Assessment Results</h1>
-            <p className="text-muted-foreground mt-2">Comprehensive analysis of your career potential.</p>
+            <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Card className="bg-background/70">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-muted-foreground mb-1">Overall Alignment</div>
+                  <div className="text-3xl font-bold">{overallScore ? `${overallScore}/5` : "—"}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-background/70">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-muted-foreground mb-1">Strength Themes</div>
+                  <div className="text-3xl font-bold">{topStrengths.length}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-background/70">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-muted-foreground mb-1">Career Matches</div>
+                  <div className="text-3xl font-bold">{careerMatches.length}</div>
+                </CardContent>
+              </Card>
+              <Card className="bg-background/70">
+                <CardContent className="pt-6">
+                  <div className="text-sm text-muted-foreground mb-1">Trend Tracking</div>
+                  <div className="text-sm font-medium">{history.length > 1 ? "Available" : "Awaiting 2nd run"}</div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-          <div className="flex gap-3">
-             <Button variant="outline" onClick={() => window.print()} className="hidden md:flex">
-                Print
-             </Button>
-             <Button onClick={handleDownloadPDF} disabled={generatingPdf} className="bg-primary">
-                {generatingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : <Download className="mr-2 h-4 w-4"/>}
-                Download Report
-             </Button>
-          </div>
-        </div>
+        </Card>
 
-        {/* Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-8">
-          <TabsList className="grid w-full grid-cols-3 lg:w-[400px]">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="detailed">Detailed Analysis</TabsTrigger>
-            <TabsTrigger value="progress">Progress</TabsTrigger>
-          </TabsList>
-
-          {/* REPORT CONTAINER FOR PDF */}
-          <div id="report-container" ref={reportRef} className="space-y-8">
-
-            {/* OVERVIEW TAB */}
-            <TabsContent value="overview" className="space-y-6">
-
-                {/* AI Insights Card */}
-                <Card className="border-primary/20 bg-primary/5">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-primary">
-                            <Lightbulb className="h-5 w-5"/> AI Executive Summary
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        {aiLoading ? (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                                <Loader2 className="h-4 w-4 animate-spin"/> Analyzing your profile...
-                            </div>
-                        ) : (
-                            <div className="prose text-gray-700 max-w-none">
-                                {aiEnhanced?.insights ? (
-                                    aiEnhanced.insights.split('\n').map((p: string, i: number) => <p key={i}>{p}</p>)
-                                ) : (
-                                    <p>No insights generated yet.</p>
-                                )}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                {/* Top Strengths */}
-                <div className="grid md:grid-cols-3 gap-6">
-                    {catAverages.sort((a,b) => b.score - a.score).slice(0,3).map((cat, i) => (
-                        <Card key={i} className="text-center hover:shadow-lg transition-all">
-                            <CardHeader className="pb-2">
-                                <div className="mx-auto bg-primary/10 w-12 h-12 rounded-full flex items-center justify-center mb-2">
-                                    <Target className="h-6 w-6 text-primary"/>
-                                </div>
-                                <CardTitle className="text-lg">#{i+1} Strength</CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="text-2xl font-bold text-gray-900">{cat.name}</div>
-                                <div className="text-muted-foreground">{cat.score.toFixed(1)}/5.0</div>
-                            </CardContent>
-                        </Card>
+        <div className="grid gap-6 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Executive Interpretation
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {aiLoading ? (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Building your interpretation...
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {(aiEnhanced?.insights || "Your profile signals broad potential. Keep building clarity by validating roles through projects, conversations, and short experiments.")
+                    .split("\n")
+                    .filter((p) => p.trim())
+                    .map((paragraph, idx) => (
+                      <p key={idx} className="text-sm md:text-base leading-relaxed text-foreground/90">
+                        {paragraph}
+                      </p>
                     ))}
                 </div>
+              )}
+            </CardContent>
+          </Card>
 
-                {/* Main Charts */}
-                <div className="grid lg:grid-cols-2 gap-8">
-                    <Card>
-                        <CardHeader><CardTitle>Aptitude Profile</CardTitle></CardHeader>
-                        <CardContent className="h-[300px]">
-                            <ResponsiveContainer width="100%" height="100%">
-                                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={catAverages}>
-                                    <PolarGrid />
-                                    <PolarAngleAxis dataKey="name" tick={{fontSize: 10}} />
-                                    <PolarRadiusAxis angle={30} domain={[0, 5]} />
-                                    <Radar name="Score" dataKey="score" stroke="#8884d8" fill="#8884d8" fillOpacity={0.6} />
-                                    <Legend />
-                                </RadarChart>
-                            </ResponsiveContainer>
-                        </CardContent>
-                    </Card>
-                    <Card>
-                        <CardHeader><CardTitle>Score Distribution</CardTitle></CardHeader>
-                        <CardContent className="h-[300px]">
-                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={catAverages}>
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="name" angle={-45} textAnchor="end" height={80} tick={{fontSize: 10}}/>
-                                    <YAxis domain={[0, 5]} />
-                                    <Tooltip />
-                                    <Bar dataKey="score" fill="#82ca9d" />
-                                </BarChart>
-                             </ResponsiveContainer>
-                        </CardContent>
-                    </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" />
+                Next Best Moves
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {(aiEnhanced?.recommendations?.[0]?.nextSteps?.slice(0, 4) || [
+                "Shortlist 2-3 roles that match your strengths.",
+                "Speak with one mentor or practitioner in each role.",
+                "Run one 2-week skill experiment to test fit.",
+                "Review and refine your learning plan monthly.",
+              ]).map((step, idx) => (
+                <div key={idx} className="flex items-start gap-2 text-sm">
+                  <CheckCircle2 className="h-4 w-4 mt-0.5 text-primary" />
+                  <span>{step}</span>
                 </div>
+              ))}
+            </CardContent>
+          </Card>
+        </div>
 
-                {/* AI Roadmap */}
-                {aiEnhanced?.recommendations && (
-                    <div className="space-y-6">
-                        <h2 className="text-2xl font-bold">Recommended Career Paths</h2>
-                        <div className="grid md:grid-cols-2 gap-6">
-                            {aiEnhanced.recommendations.map((rec: any, i: number) => (
-                                <Card key={i} className="border-l-4 border-l-primary">
-                                    <CardHeader>
-                                        <CardTitle>{rec.name}</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <div>
-                                            <div className="text-sm font-semibold text-green-600">Why it fits:</div>
-                                            <p className="text-sm text-gray-600">{rec.layer6Match}</p>
-                                        </div>
-                                        <div>
-                                            <div className="text-sm font-semibold">Next Steps:</div>
-                                            <ul className="list-disc list-inside text-sm text-gray-600">
-                                                {rec.nextSteps?.map((step: string, j: number) => <li key={j}>{step}</li>)}
-                                            </ul>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            ))}
-                        </div>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Brain className="h-5 w-5 text-primary" />
+                Strength Profile (Theme-level)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[360px]">
+              {scoredCategories.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <RadarChart data={scoredCategories.slice(0, 8)}>
+                    <PolarGrid />
+                    <PolarAngleAxis dataKey="name" tick={{ fontSize: 11 }} />
+                    <PolarRadiusAxis angle={20} domain={[0, 5]} />
+                    <Radar dataKey="score" stroke="#8b5cf6" fill="#8b5cf6" fillOpacity={0.35} />
+                    <Tooltip />
+                  </RadarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full grid place-items-center text-sm text-muted-foreground">
+                  Complete the assessment to view your interpreted profile.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Compass className="h-5 w-5 text-primary" />
+                Career Match Confidence
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="h-[360px]">
+              {careerMatches.length ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={careerMatches} layout="vertical" margin={{ left: 20, right: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" domain={[0, 5]} />
+                    <YAxis dataKey="name" type="category" width={180} tick={{ fontSize: 11 }} />
+                    <Tooltip />
+                    <Bar dataKey="fitScore" fill="#14b8a6" radius={[6, 6, 6, 6]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full grid place-items-center text-sm text-muted-foreground">
+                  AI recommendations will appear here once interpretation is available.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-primary" />
+                High-Leverage Strengths
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {topStrengths.length ? (
+                topStrengths.map((item) => (
+                  <div key={item.name} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{item.name}</span>
+                      <span className="text-muted-foreground">{item.score}/5</span>
                     </div>
-                )}
-            </TabsContent>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-2 bg-primary rounded-full" style={{ width: `${(item.score / 5) * 100}%` }} />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No scored themes yet.</p>
+              )}
+            </CardContent>
+          </Card>
 
-            {/* DETAILED ANALYSIS TAB */}
-            <TabsContent value="detailed" className="space-y-6">
-                <Card>
-                    <CardHeader>
-                         <CardTitle className="flex items-center gap-2">
-                            <PieChart className="h-5 w-5"/> Comprehensive Category Breakdown
-                         </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="space-y-4">
-                            {catAverages.map((cat, i) => (
-                                <div key={i} className="flex items-center gap-4">
-                                    <div className="w-1/3 text-sm font-medium">{cat.name}</div>
-                                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-primary"
-                                            style={{ width: `${(cat.score / 5) * 100}%` }}
-                                        />
-                                    </div>
-                                    <div className="w-12 text-sm font-bold text-right">{cat.score}</div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-            </TabsContent>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Lightbulb className="h-5 w-5 text-primary" />
+                Development Priorities
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {growthThemes.length ? (
+                growthThemes.map((item) => (
+                  <div key={item.name} className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium">{item.name}</span>
+                      <span className="text-muted-foreground">{item.score}/5</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-muted overflow-hidden">
+                      <div className="h-2 bg-accent rounded-full" style={{ width: `${(item.score / 5) * 100}%` }} />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-muted-foreground">No scored themes yet.</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-            {/* PROGRESS TAB */}
-            <TabsContent value="progress" className="space-y-6">
-                 {history.length < 2 ? (
-                     <Card className="text-center py-12">
-                         <CardContent>
-                             <Activity className="h-12 w-12 text-gray-300 mx-auto mb-4"/>
-                             <h3 className="text-lg font-medium">Not enough history</h3>
-                             <p className="text-muted-foreground">Complete more assessments to see your progress over time.</p>
-                         </CardContent>
-                     </Card>
-                 ) : (
-                     <div className="space-y-6">
-                         <Card>
-                             <CardHeader><CardTitle>Growth Areas</CardTitle></CardHeader>
-                             <CardContent>
-                                 <p className="text-muted-foreground mb-4">Comparing to your last assessment on {new Date(history[1]?.completed_at).toLocaleDateString()}</p>
-                                 {/* Progress implementation would go here - comparing scores */}
-                                 <div className="text-sm text-gray-500">Feature pending full historical data integration.</div>
-                             </CardContent>
-                         </Card>
-                     </div>
-                 )}
-            </TabsContent>
-          </div>
-
-        </Tabs>
-      </div>
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-center justify-between flex-wrap gap-3">
+              <h2 className="text-lg font-semibold">Progress & Reflection</h2>
+              <Badge variant="outline">Interpretation-first experience</Badge>
+            </div>
+            <Separator />
+            <p className="text-sm text-muted-foreground">{recentComparisonText}</p>
+            <div className="flex gap-3 flex-wrap">
+              <Button asChild variant="outline">
+                <Link to="/assessment">
+                  Retake Assessment <ArrowRight className="ml-2 h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild>
+                <Link to="/profile">Update Profile Context</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
     </main>
   );
 };
