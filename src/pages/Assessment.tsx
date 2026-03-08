@@ -149,17 +149,20 @@ const Assessment = () => {
           return;
         }
 
+        // Check for existing in-progress assessment to resume
         const { data } = await supabase
           .from("assessments")
           .select("id, current_layer")
           .eq("user_id", user.id)
           .eq("status", "in_progress")
+          .order("created_at", { ascending: false })
           .limit(1);
 
         if (data && data.length) {
           setAssessmentId(data[0].id);
           setLayer((data[0].current_layer as number) as LayerKey);
         } else {
+          // No in-progress assessment — create a new one
           const { data: created, error } = await supabase
             .from("assessments")
             .insert({ user_id: user.id })
