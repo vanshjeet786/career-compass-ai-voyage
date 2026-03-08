@@ -37,6 +37,14 @@ const BackgroundInfo = () => {
     setLoading(true);
 
     try {
+      // Abandon any existing in-progress assessments first
+      await supabase
+        .from("assessments")
+        .update({ status: "abandoned" })
+        .eq("user_id", user.id)
+        .eq("status", "in_progress");
+
+      // Create a fresh assessment with background info
       const { data, error } = await supabase
         .from("assessments")
         .insert({

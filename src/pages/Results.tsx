@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useLocation, Navigate, Link } from "react-router-dom";
+import { useLocation, Navigate, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -76,6 +76,7 @@ function useQuery() {
 const Results = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const q = useQuery();
   const assessId = q.get("assess");
 
@@ -369,6 +370,23 @@ const Results = () => {
     }
   };
 
+  // Auto-redirect to latest completed assessment if no ID in URL
+  useEffect(() => {
+    if (assessId || !user || loading) return;
+    (async () => {
+      const { data } = await supabase
+        .from("assessments")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false })
+        .limit(1);
+      if (data && data.length) {
+        navigate(`/results?assess=${data[0].id}`, { replace: true });
+      }
+    })();
+  }, [assessId, user, loading, navigate]);
+
   if (loading) {
     return (
       <div className="min-h-screen grid place-items-center">
@@ -384,12 +402,12 @@ const Results = () => {
       <main className="min-h-screen grid place-items-center px-4 text-center">
         <Card className="max-w-xl">
           <CardHeader>
-            <CardTitle className="text-2xl">No assessment selected</CardTitle>
+            <CardTitle className="text-2xl">No completed assessments</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-muted-foreground">We could not find an assessment id in the URL.</p>
+            <p className="text-muted-foreground">Complete an assessment to see your career blueprint.</p>
             <Button asChild>
-              <Link to="/assessment">Go to Assessment</Link>
+              <Link to="/background-info">Start Assessment</Link>
             </Button>
           </CardContent>
         </Card>

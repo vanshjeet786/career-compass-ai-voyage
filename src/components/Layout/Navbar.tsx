@@ -87,7 +87,15 @@ export const Navbar = () => {
         <div className="flex items-center gap-2">
           <Button
             size="sm"
-            onClick={() => navigate("/assessment")}
+            onClick={async () => {
+              // Abandon old in-progress assessments, then go to background info for a fresh start
+              await supabase
+                .from("assessments")
+                .update({ status: "abandoned" })
+                .eq("user_id", user.id)
+                .eq("status", "in_progress");
+              navigate("/background-info");
+            }}
             className="hidden sm:inline-flex gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -170,8 +178,13 @@ export const Navbar = () => {
           })}
           <Button
             className="w-full justify-start gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => {
-              navigate("/assessment");
+            onClick={async () => {
+              await supabase
+                .from("assessments")
+                .update({ status: "abandoned" })
+                .eq("user_id", user.id)
+                .eq("status", "in_progress");
+              navigate("/background-info");
               setMobileOpen(false);
             }}
           >

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -102,6 +102,7 @@ type ResponseValue =
 const Assessment = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [layer, setLayer] = useState<LayerKey>(1);
   const [responses, setResponses] = useState<Record<string, ResponseValue>>({});
@@ -149,17 +150,20 @@ const Assessment = () => {
           return;
         }
 
+        // Check for existing in-progress assessment to resume
         const { data } = await supabase
           .from("assessments")
           .select("id, current_layer")
           .eq("user_id", user.id)
           .eq("status", "in_progress")
+          .order("created_at", { ascending: false })
           .limit(1);
 
         if (data && data.length) {
           setAssessmentId(data[0].id);
           setLayer((data[0].current_layer as number) as LayerKey);
         } else {
+          // No in-progress assessment — create a new one
           const { data: created, error } = await supabase
             .from("assessments")
             .insert({ user_id: user.id })
@@ -187,12 +191,12 @@ const Assessment = () => {
       return next;
     });
     try {
-      await supabase.from("assessment_responses").insert({
+      await supabase.from("assessment_responses").upsert({
         assessment_id: assessmentId,
         layer_number: layer,
         question_id: questionId,
-        response_value: value,
-      });
+        response_value: value as any,
+      }, { onConflict: "assessment_id,question_id" });
     } catch (error: any) {
       toast({ title: "Error saving response", description: error.message, variant: "destructive" });
     }
@@ -262,7 +266,8 @@ const Assessment = () => {
         body: { mode: 'suggest', question, context: { layer, responses } },
       });
       if (error) throw error;
-      const aiSuggestions = data.text.split('\n').filter((s: string) => s.trim()).slice(0, 3);
+      const rawText = data?.text || data?.generatedText || '';
+      const aiSuggestions = rawText.split('\n').filter((s: string) => s.trim()).slice(0, 3);
       setSuggestions(prev => ({ 
         ...prev, 
         [question]: [...(prev[question] || []), ...aiSuggestions] 
@@ -317,7 +322,7 @@ const Assessment = () => {
       if (done) {
         await supabase.from("assessments").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", assessmentId);
         toast({ title: "Assessment completed", description: "View your results now." });
-        window.location.href = "/results?assess=" + assessmentId;
+        navigate("/results?assess=" + assessmentId);
       } else {
         setLayer(next);
         await supabase.from("assessments").update({ current_layer: next }).eq("id", assessmentId);
