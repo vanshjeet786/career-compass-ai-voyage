@@ -526,10 +526,14 @@ const Assessment = () => {
                               variant="outline" 
                               size="sm" 
                               onClick={() => handleExplanation(q)} 
+                              disabled={aiLoading === q + 'explain'}
                               className="px-4 py-2 rounded-full hover:bg-transparent hover:text-primary hover:border-primary/50 transition-all duration-200"
                             >
-                              <HelpCircle className="h-4 w-4 mr-2" />
-                              Explain
+                              {aiLoading === q + 'explain' ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Loading...</>
+                              ) : (
+                                <><HelpCircle className="h-4 w-4 mr-2" /> Explain</>
+                              )}
                             </Button>
                             {showSuggestButton && (
                               <Button 
