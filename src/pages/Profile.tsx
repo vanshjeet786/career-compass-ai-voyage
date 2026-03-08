@@ -163,7 +163,7 @@ const Profile = () => {
         </div>
 
         {/* Quick Actions */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 animate-fade-in">
           <Button
             onClick={() => navigate("/assessment")}
             className="h-auto py-4 px-5 bg-primary text-primary-foreground hover:bg-primary/90 justify-start gap-3"
