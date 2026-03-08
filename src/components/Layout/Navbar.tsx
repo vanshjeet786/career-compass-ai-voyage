@@ -123,10 +123,6 @@ export const Navbar = () => {
                 <User className="h-4 w-4 mr-2" />
                 Profile
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/results")}>
-                <FileText className="h-4 w-4 mr-2" />
-                Latest Results
-              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/background-info")}>
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Background Info

@@ -179,24 +179,6 @@ const Profile = () => {
 
           <Button
             variant="outline"
-            onClick={() =>
-              data?.latestAssessmentId
-                ? navigate(`/results?assess=${data.latestAssessmentId}`)
-                : navigate("/results")
-            }
-            className="h-auto py-4 px-5 justify-start gap-3 border-border hover:bg-muted"
-          >
-            <div className="p-2 bg-primary/10 rounded-lg">
-              <BarChart3 className="h-5 w-5 text-primary" />
-            </div>
-            <div className="text-left">
-              <div className="font-semibold text-foreground">View Results</div>
-              <div className="text-xs text-muted-foreground">See latest insights</div>
-            </div>
-          </Button>
-
-          <Button
-            variant="outline"
             onClick={() => navigate("/background-info")}
             className="h-auto py-4 px-5 justify-start gap-3 border-border hover:bg-muted"
           >

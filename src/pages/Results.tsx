@@ -453,23 +453,20 @@ const Results = () => {
                 </div>
               </div>
 
-              {/* Score gauge */}
-              <div className="flex flex-col items-center gap-3">
-                <ScoreGauge value={overallScore} max={5} label="Profile Score" size="lg" />
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => window.print()}>
-                    <Printer className="h-3.5 w-3.5 mr-1.5" />
-                    Print
-                  </Button>
-                  <Button size="sm" onClick={handleDownloadPDF} disabled={generatingPdf}>
-                    {generatingPdf ? (
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    ) : (
-                      <Download className="h-3.5 w-3.5 mr-1.5" />
-                    )}
-                    PDF
-                  </Button>
-                </div>
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => window.print()}>
+                  <Printer className="h-3.5 w-3.5 mr-1.5" />
+                  Print
+                </Button>
+                <Button size="sm" onClick={handleDownloadPDF} disabled={generatingPdf}>
+                  {generatingPdf ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  PDF
+                </Button>
               </div>
             </div>
           </div>
