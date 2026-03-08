@@ -7,9 +7,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, Download, ArrowRight, BarChart3, Compass, MessageSquare, Eye } from "lucide-react";
+import {
+  Loader2,
+  Download,
+  ArrowRight,
+  BarChart3,
+  Compass,
+  MessageSquare,
+  Eye,
+  Sparkles,
+  Printer,
+} from "lucide-react";
 import { generatePDFReport } from "@/utils/pdfGenerator";
 import { generateUserProfile, generateCareerRecommendations } from "@/utils/userProfile";
+import { generateExecutiveSummary } from "@/utils/scoreHelpers";
 import type { ResponseData } from "@/utils/userProfile";
 import {
   LAYER_1_QUESTIONS,
@@ -19,11 +30,11 @@ import {
   LAYER_5_QUESTIONS,
 } from "@/data/questions";
 
+import ScoreGauge from "@/components/results/ScoreGauge";
 import OverviewTab from "@/components/results/OverviewTab";
 import ScoreBreakdown from "@/components/results/ScoreBreakdown";
 import CareerPathsPanel from "@/components/results/CareerPathsPanel";
 import AIChatPanel from "@/components/results/AIChatPanel";
-import AIEnhancedDialog from "@/components/results/AIEnhancedDialog";
 
 type ResponseRow = {
   question_id: string;
@@ -35,6 +46,28 @@ type AssessmentRecord = {
   id: string;
   background_info?: Record<string, unknown> | null;
 };
+
+interface AIResults {
+  insights: string;
+  recommendations: Array<{
+    name: string;
+    pros: string[];
+    cons: string[];
+    nextSteps: string[];
+    layer6Match: string;
+  }>;
+  visualizationData: {
+    labels: string[];
+    baseScores: number[];
+    enhancedScores: number[];
+  };
+  roadmap: {
+    shortTerm: string[];
+    mediumTerm: string[];
+    longTerm: string[];
+    fearsAddressed: string[];
+  };
+}
 
 function useQuery() {
   return new URLSearchParams(useLocation().search);
@@ -49,10 +82,11 @@ const Results = () => {
   const [rows, setRows] = useState<ResponseRow[]>([]);
   const [assessment, setAssessment] = useState<AssessmentRecord | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiResults, setAiResults] = useState<AIResults | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
 
   useEffect(() => {
-    document.title = "Career Compass Results — Your Career Blueprint";
+    document.title = "Career Compass — Your Career Blueprint";
   }, []);
 
   useEffect(() => {
@@ -90,7 +124,7 @@ const Results = () => {
     return generateUserProfile(rows as ResponseData[], assessId);
   }, [rows, assessId]);
 
-  // Career recommendations (quantitative only)
+  // Career recommendations
   const careerRecommendations = useMemo(() => {
     if (!userProfile) return [];
     return generateCareerRecommendations(userProfile);
@@ -127,6 +161,12 @@ const Results = () => {
     [scoredCategories]
   );
 
+  // Executive summary
+  const executiveSummary = useMemo(() => {
+    if (!userProfile || !careerRecommendations.length) return "";
+    return generateExecutiveSummary(userProfile, careerRecommendations);
+  }, [userProfile, careerRecommendations]);
+
   // Layer breakdowns for ScoreBreakdown component
   const layerBreakdowns = useMemo(() => {
     if (!userProfile) return [];
@@ -150,37 +190,37 @@ const Results = () => {
       buildLayer(
         "Layer 1: Intelligence Types",
         1,
-        "Measures your multiple intelligences based on Howard Gardner's theory — linguistic, logical-mathematical, spatial, musical, and more.",
+        "How you naturally process information, solve problems, and make sense of the world.",
         userProfile.intelligenceScores
       ),
       buildLayer(
         "Layer 2: Personality Traits",
         2,
-        "Assesses your personality using MBTI preferences, Big Five traits, and Self-Determination Theory motivations.",
+        "Your work style preferences, motivational drivers, and how you interact with others.",
         userProfile.personalityTraits
       ),
       buildLayer(
         "Layer 3: Aptitudes & Skills",
         3,
-        "Evaluates your practical aptitudes including numerical, verbal, abstract reasoning, technical, creative, and communication skills.",
+        "Your practical capabilities — the skills that translate directly into professional performance.",
         userProfile.aptitudes
       ),
       buildLayer(
         "Layer 4: Background & Context",
         4,
-        "Considers your educational background, socioeconomic factors, and career exposure that shape your opportunities.",
+        "The educational, socioeconomic, and experiential factors that shape your career landscape.",
         userProfile.backgroundFactors
       ),
       buildLayer(
         "Layer 5: Interests & Values",
         5,
-        "Explores your interests, passions, career trend awareness, and personal goals and values.",
+        "What energizes you, what you care about, and the direction your motivation naturally pulls.",
         userProfile.interests
       ),
     ];
   }, [userProfile]);
 
-  // Quantitative scores for AI Enhanced
+  // Quantitative scores for AI
   const quantitativeScores = useMemo(() => {
     const scores: Record<string, number> = {};
     scoredCategories.forEach((c) => {
@@ -201,6 +241,94 @@ const Results = () => {
     [rows]
   );
 
+  // Auto-load AI enhanced results on mount
+  useEffect(() => {
+    if (!assessId || !Object.keys(quantitativeScores).length || aiResults || aiLoading) return;
+
+    const fetchAIResults = async () => {
+      setAiLoading(true);
+      const topStrStr = Object.entries(quantitativeScores)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 8)
+        .map(([k, v]) => `${k}: ${v.toFixed(1)}/5`)
+        .join(", ");
+
+      const qualitativeText = layer6Responses
+        .filter((r) => r.response?.trim())
+        .map((r) => `Q: "${r.question}"\nA: "${r.response}"`)
+        .join("\n\n");
+
+      try {
+        const { data, error: fnError } = await supabase.functions.invoke("gemini-assist", {
+          body: {
+            mode: "enhanced-results",
+            context: {
+              quantitativeScores,
+              topStrengths: topStrStr,
+              qualitativeText,
+              backgroundInfo: assessment?.background_info,
+              layer6Responses,
+            },
+          },
+        });
+
+        if (fnError) throw fnError;
+
+        let parsed: AIResults;
+        if (data?.toolResult) {
+          parsed = data.toolResult;
+        } else if (data?.generatedText) {
+          const cleaned = data.generatedText
+            .replace(/<think>[\s\S]*?<\/think>/g, "")
+            .replace(/^```json\s*/, "")
+            .replace(/\s*```$/, "")
+            .trim();
+          const match = cleaned.match(/\{[\s\S]*\}/);
+          parsed = match ? JSON.parse(match[0]) : null;
+        } else {
+          throw new Error("No data returned");
+        }
+
+        if (!parsed) throw new Error("Failed to parse AI response");
+
+        if (!parsed.roadmap) {
+          parsed.roadmap = {
+            shortTerm: ["Research your top 2-3 career matches in depth"],
+            mediumTerm: ["Develop key skills through courses or projects"],
+            longTerm: ["Build professional network in your target field"],
+            fearsAddressed: ["Every career change starts with small exploratory steps"],
+          };
+        }
+
+        setAiResults(parsed);
+      } catch (err) {
+        console.error("AI Enhanced error:", err);
+        // Provide fallback so rest of page works
+        setAiResults({
+          insights: "",
+          recommendations: [],
+          visualizationData: {
+            labels: Object.keys(quantitativeScores).slice(0, 6),
+            baseScores: Object.values(quantitativeScores).slice(0, 6),
+            enhancedScores: Object.values(quantitativeScores)
+              .slice(0, 6)
+              .map((s) => Math.min(s + 0.3, 5)),
+          },
+          roadmap: {
+            shortTerm: ["Explore your top career matches", "Talk to professionals in these fields"],
+            mediumTerm: ["Build key skills through courses or projects", "Gain relevant experience"],
+            longTerm: ["Pursue your chosen career path with confidence"],
+            fearsAddressed: ["Your profile shows strong potential — take it one step at a time"],
+          },
+        });
+      } finally {
+        setAiLoading(false);
+      }
+    };
+
+    fetchAIResults();
+  }, [assessId, quantitativeScores, layer6Responses, assessment, aiResults, aiLoading]);
+
   // Chat context
   const chatContext = useMemo(
     () => ({
@@ -214,13 +342,23 @@ const Results = () => {
     [topStrengths, growthAreas, overallScore, assessment, userProfile, careerRecommendations]
   );
 
+  // Comparison data from AI
+  const comparisonData = useMemo(() => {
+    if (!aiResults?.visualizationData?.labels) return undefined;
+    return aiResults.visualizationData.labels.map((label, i) => ({
+      name: label,
+      base: aiResults.visualizationData.baseScores[i] || 0,
+      enhanced: aiResults.visualizationData.enhancedScores[i] || 0,
+    }));
+  }, [aiResults]);
+
   const handleDownloadPDF = async () => {
     setGeneratingPdf(true);
     try {
       await generatePDFReport("results-report", {
         userName: user?.email || "User",
         scores: quantitativeScores,
-        insights: "Your comprehensive career assessment results.",
+        insights: executiveSummary,
         topStrengths: topStrengths.map((i) => i.name),
       });
       toast({ title: "Report downloaded", description: "Your career blueprint PDF is ready." });
@@ -259,53 +397,77 @@ const Results = () => {
     );
   }
 
+  const topCareer = careerRecommendations[0];
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-muted/30 pb-16">
       <section className="container max-w-7xl py-10 space-y-6" id="results-report">
-        {/* Header */}
-        <Card className="overflow-hidden border-primary/20">
+        {/* ─── Hero Header ─────────────────────────────────────────── */}
+        <Card className="overflow-hidden border-primary/20 animate-fade-in">
           <div className="bg-gradient-to-r from-primary/15 via-secondary/10 to-accent/15 p-8 md:p-10">
-            <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-6">
-              <div className="space-y-3">
+            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-8">
+              <div className="space-y-4 flex-1">
                 <Badge className="bg-primary/20 text-primary hover:bg-primary/20">
+                  <Sparkles className="h-3 w-3 mr-1" />
                   Career Blueprint
                 </Badge>
                 <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-                  Your Assessment Results
+                  Your Career Blueprint
                 </h1>
-                <p className="text-muted-foreground max-w-2xl text-sm md:text-base">
-                  Explore your strengths, discover career paths, and get AI-powered insights — all
-                  based on your comprehensive 6-layer assessment.
+                <p className="text-muted-foreground max-w-2xl text-sm md:text-base leading-relaxed">
+                  {executiveSummary ||
+                    "Your assessment tells a compelling story. Here's what we discovered about your potential, and where it could take you."}
                 </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Button variant="outline" onClick={() => window.print()}>
-                  Print
-                </Button>
-                <Button onClick={handleDownloadPDF} disabled={generatingPdf}>
-                  {generatingPdf ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="h-4 w-4 mr-2" />
+
+                {/* Quick stats */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Badge variant="secondary" className="text-xs font-medium">
+                    {topStrengths.length} Key Strengths
+                  </Badge>
+                  <Badge variant="secondary" className="text-xs font-medium">
+                    {growthAreas.length} Growth Areas
+                  </Badge>
+                  {topCareer && (
+                    <Badge variant="secondary" className="text-xs font-medium">
+                      Top Match: {topCareer.title} ({topCareer.compatibilityScore}%)
+                    </Badge>
                   )}
-                  Download PDF
-                </Button>
+                </div>
+              </div>
+
+              {/* Score gauge */}
+              <div className="flex flex-col items-center gap-3">
+                <ScoreGauge value={overallScore} max={5} label="Profile Score" size="lg" />
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => window.print()}>
+                    <Printer className="h-3.5 w-3.5 mr-1.5" />
+                    Print
+                  </Button>
+                  <Button size="sm" onClick={handleDownloadPDF} disabled={generatingPdf}>
+                    {generatingPdf ? (
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    ) : (
+                      <Download className="h-3.5 w-3.5 mr-1.5" />
+                    )}
+                    PDF
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
         </Card>
 
-        {/* Main Tabs */}
+        {/* ─── Main Tabs ───────────────────────────────────────────── */}
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="w-full justify-start flex-wrap h-auto gap-1 bg-muted/50 p-1">
             <TabsTrigger value="overview" className="gap-1.5">
-              <Eye className="h-4 w-4" /> Overview
+              <Eye className="h-4 w-4" /> Your Profile
             </TabsTrigger>
             <TabsTrigger value="breakdown" className="gap-1.5">
-              <BarChart3 className="h-4 w-4" /> Score Breakdown
+              <BarChart3 className="h-4 w-4" /> Deep Dive
             </TabsTrigger>
             <TabsTrigger value="careers" className="gap-1.5">
-              <Compass className="h-4 w-4" /> Career Paths
+              <Compass className="h-4 w-4" /> Your Careers
             </TabsTrigger>
             <TabsTrigger value="chat" className="gap-1.5">
               <MessageSquare className="h-4 w-4" /> Talk to AI
@@ -318,7 +480,9 @@ const Results = () => {
               topStrengths={topStrengths}
               growthAreas={growthAreas}
               radarData={scoredCategories}
-              onOpenAIEnhanced={() => setAiDialogOpen(true)}
+              careers={careerRecommendations}
+              comparisonData={comparisonData}
+              userProfile={userProfile}
             />
           </TabsContent>
 
@@ -327,15 +491,26 @@ const Results = () => {
           </TabsContent>
 
           <TabsContent value="careers">
-            <CareerPathsPanel careers={careerRecommendations} />
+            <CareerPathsPanel
+              careers={careerRecommendations}
+              userProfile={userProfile}
+              aiRoadmap={aiResults?.roadmap}
+              aiLoading={aiLoading}
+              aiRecommendations={aiResults?.recommendations}
+            />
           </TabsContent>
 
           <TabsContent value="chat">
-            <AIChatPanel assessmentContext={chatContext} />
+            <AIChatPanel
+              assessmentContext={chatContext}
+              topStrengths={topStrengths}
+              growthAreas={growthAreas}
+              careers={careerRecommendations}
+            />
           </TabsContent>
         </Tabs>
 
-        {/* Bottom actions */}
+        {/* ─── Bottom Actions ──────────────────────────────────────── */}
         <Card>
           <CardContent className="pt-6">
             <div className="flex gap-3 flex-wrap">
@@ -351,16 +526,6 @@ const Results = () => {
           </CardContent>
         </Card>
       </section>
-
-      {/* AI Enhanced Dialog */}
-      <AIEnhancedDialog
-        open={aiDialogOpen}
-        onOpenChange={setAiDialogOpen}
-        assessmentId={assessId}
-        quantitativeScores={quantitativeScores}
-        layer6Responses={layer6Responses}
-        backgroundInfo={assessment?.background_info}
-      />
     </main>
   );
 };

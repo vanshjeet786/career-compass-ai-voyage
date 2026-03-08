@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -15,7 +16,25 @@ import {
   CartesianGrid,
   Tooltip,
   Cell,
+  ReferenceLine,
 } from "recharts";
+import {
+  Brain,
+  Heart,
+  Wrench,
+  GraduationCap,
+  Compass,
+  ChevronDown,
+  Briefcase,
+} from "lucide-react";
+import {
+  getScoreColor,
+  getScoreBarHsl,
+  getScoreTier,
+  getScoreInterpretation,
+  getLayerNarrative,
+  getCareerRelevanceForCategory,
+} from "@/utils/scoreHelpers";
 
 interface SubScore {
   name: string;
@@ -34,152 +53,27 @@ interface ScoreBreakdownProps {
   layers: LayerBreakdown[];
 }
 
-const LAYER_EXPLANATIONS: Record<string, Record<string, { high: string; low: string }>> = {
-  "Layer 1: Intelligence Types": {
-    Linguistic: {
-      high: "Strong verbal and written communication skills. You excel at expressing ideas clearly and persuasively. Careers in writing, law, teaching, and public relations would leverage this strength.",
-      low: "You may prefer non-verbal communication or visual/hands-on approaches. Consider roles that emphasize technical skills, design, or quantitative analysis over extensive writing.",
-    },
-    "Logical-Mathematical Intelligence": {
-      high: "Excellent analytical and problem-solving abilities. You thrive with data, patterns, and systematic thinking. Ideal for STEM careers, finance, and research.",
-      low: "You may prefer creative or interpersonal work over heavy analytical tasks. Look for roles that balance structure with creativity.",
-    },
-    "Interpersonal Intelligence": {
-      high: "Strong ability to understand and work with others. You're a natural collaborator and leader. Great for management, counseling, sales, and team-based roles.",
-      low: "You may prefer independent work. Consider roles in research, programming, writing, or technical fields where solo contributions are valued.",
-    },
-    "Intrapersonal Intelligence": {
-      high: "Strong self-awareness and emotional regulation. You understand your motivations and can set meaningful goals. Great foundation for leadership and entrepreneurship.",
-      low: "Consider developing reflection practices. Mentorship and career coaching can help clarify your direction.",
-    },
-    "Naturalistic Intelligence": {
-      high: "You notice environmental patterns and connect with the natural world. Consider environmental science, agriculture, conservation, or outdoor education.",
-      low: "You may prefer urban or indoor work environments. Focus on your other intelligence strengths for career direction.",
-    },
-    "Bodily-Kinesthetic Intelligence": {
-      high: "Excellent physical coordination and hands-on learning. Consider trades, sports, performing arts, surgery, or physical therapy.",
-      low: "You may prefer desk-based or cognitive work. Focus on roles emphasizing thinking and communication over physical activity.",
-    },
-    "Musical Intelligence": {
-      high: "Strong sense of rhythm, pitch, and musical patterns. Consider music production, sound engineering, performing arts, or music therapy.",
-      low: "Music may not be a primary career driver, but it can be a fulfilling hobby alongside your professional path.",
-    },
-    "Visual-Spatial Intelligence": {
-      high: "Excellent ability to visualize and think in 3D. Ideal for architecture, design, engineering, art, or navigation-related fields.",
-      low: "You may prefer verbal or logical approaches. Consider roles that don't heavily rely on spatial reasoning.",
-    },
-    "Cognitive Styles": {
-      high: "You have strong awareness of how you learn best. This meta-cognitive skill helps you adapt and succeed across different work environments.",
-      low: "Experimenting with different learning approaches could help you discover more effective study and work strategies.",
-    },
-  },
-  "Layer 2: Personality Traits": {
-    MBTI: {
-      high: "You show clear personality preferences, suggesting strong self-awareness. Use this clarity to find work environments that match your natural style.",
-      low: "Balanced personality preferences give you flexibility to adapt to various work environments and team dynamics.",
-    },
-    "Big Five - Openness": {
-      high: "Highly curious and creative. You thrive in roles requiring innovation, artistic expression, and intellectual exploration.",
-      low: "You prefer stability and proven methods. Consider structured roles in operations, administration, or established industries.",
-    },
-    "Big Five - Conscientiousness": {
-      high: "Very organized and reliable. You excel in project management, finance, healthcare, and any role requiring attention to detail.",
-      low: "You may work best in flexible, creative environments. Consider roles in startups, creative agencies, or freelance work.",
-    },
-    "Big Five - Extraversion": {
-      high: "Energized by social interaction. Sales, marketing, teaching, and leadership roles would suit your outgoing nature.",
-      low: "You recharge through solitude. Research, writing, programming, and analytical roles may suit you better.",
-    },
-    "Big Five - Agreeableness": {
-      high: "Highly empathetic and cooperative. Excellent for counseling, healthcare, education, and team-oriented roles.",
-      low: "You're direct and independent in your thinking. Consider competitive fields, law, negotiation, or strategic roles.",
-    },
-    "Big Five - Neuroticism": {
-      high: "You're sensitive and may experience stress more intensely. Consider structured environments with good support systems, or roles in empathetic fields.",
-      low: "Emotionally stable and calm under pressure. Great for high-stakes roles in emergency services, leadership, or crisis management.",
-    },
-    "SDT - Autonomy": {
-      high: "You strongly value independence in your work. Entrepreneurship, consulting, freelancing, and remote roles would satisfy this need.",
-      low: "You work well with guidance and structure. Consider established organizations with clear career paths and mentorship.",
-    },
-    "SDT - Competence": {
-      high: "You have a strong drive to master skills. Careers with clear progression, certifications, and skill development opportunities will motivate you.",
-      low: "Focus on finding roles where you feel capable and can build confidence through gradual skill development.",
-    },
-    "SDT - Relatedness": {
-      high: "You value deep connections at work. Seek team-oriented cultures, collaborative projects, and community-focused organizations.",
-      low: "You may prefer professional boundaries. Consider roles where performance is measured individually.",
-    },
-  },
-  "Layer 3: Aptitudes & Skills": {
-    "Numerical Aptitude": {
-      high: "Strong with numbers and quantitative analysis. Excellent for finance, data science, engineering, and accounting.",
-      low: "Focus on careers where verbal, creative, or interpersonal skills are more central than numerical analysis.",
-    },
-    "Verbal Aptitude": {
-      high: "Excellent language and communication skills. Great for law, journalism, teaching, marketing, and public relations.",
-      low: "Consider roles where visual, technical, or quantitative skills matter more than extensive verbal communication.",
-    },
-    "Abstract Reasoning": {
-      high: "Strong logical thinking and pattern recognition. Ideal for programming, research, strategic planning, and consulting.",
-      low: "You may prefer concrete, practical tasks. Consider hands-on or people-oriented careers over highly theoretical ones.",
-    },
-    "Technical Skills": {
-      high: "Strong technical aptitude. You learn tools and systems quickly. Excellent for IT, engineering, and technical specialist roles.",
-      low: "You may prefer people-focused or creative work over heavy technical tasks. Consider business, education, or arts roles.",
-    },
-    "Creative/Design Skills": {
-      high: "Strong creative abilities. Consider graphic design, UX/UI, advertising, architecture, or art direction.",
-      low: "You may prefer analytical or structured work. Consider pairing creativity with other strengths in hybrid roles.",
-    },
-    "Communication Skills": {
-      high: "Excellent communicator. You can persuade, present, and connect with audiences. Great for leadership, sales, and media.",
-      low: "Consider developing communication skills through practice, or focus on roles where technical output matters more.",
-    },
-  },
-  "Layer 4: Background & Context": {
-    "Educational Background": {
-      high: "Strong educational foundation. You have access to resources that can accelerate your career development.",
-      low: "Limited educational resources may require creative alternatives like online courses, bootcamps, or apprenticeships.",
-    },
-    "Socioeconomic Factors": {
-      high: "Good financial and resource support for career development. You can invest in education and skill-building.",
-      low: "Financial constraints may shape your career choices. Look for scholarships, free training programs, and paid apprenticeships.",
-    },
-    "Career Exposure": {
-      high: "Wide exposure to different careers gives you informed decision-making ability. Use this breadth to make confident choices.",
-      low: "Limited career exposure suggests seeking informational interviews, job shadowing, and career exploration programs.",
-    },
-  },
-  "Layer 5: Interests & Values": {
-    "Interests and Passions": {
-      high: "Clear, strong interests guide your career direction. Pursue roles that align with these passions for long-term fulfillment.",
-      low: "You may be exploring or haven't identified strong interests yet. Try diverse experiences to discover what energizes you.",
-    },
-    "Career Trends Awareness": {
-      high: "Good awareness of market trends. You can make strategic career decisions aligned with growing industries.",
-      low: "Spend time researching emerging fields and industry trends to make more informed career choices.",
-    },
-    "Personal Goals and Values": {
-      high: "Clear personal values drive your career choices. This alignment leads to greater job satisfaction and purpose.",
-      low: "Clarifying your values through reflection exercises and career counseling can help focus your career search.",
-    },
-  },
-};
-
-const getBarColor = (score: number) => {
-  if (score >= 4) return "hsl(142, 71%, 45%)";
-  if (score >= 3) return "hsl(48, 96%, 53%)";
-  return "hsl(0, 84%, 60%)";
+const LAYER_THEME: Record<number, { border: string; icon: React.ReactNode; bg: string }> = {
+  1: { border: "border-l-blue-500", icon: <Brain className="h-4 w-4 text-blue-500" />, bg: "bg-blue-500/5" },
+  2: { border: "border-l-purple-500", icon: <Heart className="h-4 w-4 text-purple-500" />, bg: "bg-purple-500/5" },
+  3: { border: "border-l-emerald-500", icon: <Wrench className="h-4 w-4 text-emerald-500" />, bg: "bg-emerald-500/5" },
+  4: { border: "border-l-amber-500", icon: <GraduationCap className="h-4 w-4 text-amber-500" />, bg: "bg-amber-500/5" },
+  5: { border: "border-l-rose-500", icon: <Compass className="h-4 w-4 text-rose-500" />, bg: "bg-rose-500/5" },
 };
 
 const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+
+  const toggleCard = (key: string) => {
+    setExpandedCards((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
   return (
     <div className="space-y-4">
       <div className="mb-4">
-        <h2 className="text-xl font-bold">Layer-by-Layer Score Breakdown</h2>
+        <h2 className="text-xl font-bold">The Deep Dive</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          See how you scored in each assessment layer and what it means for your career direction.
+          A detailed look at what makes your profile unique — and how each dimension connects to your career potential.
         </p>
       </div>
 
@@ -190,17 +84,19 @@ const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
               ? layer.subScores.reduce((s, i) => s + i.score, 0) / layer.subScores.length
               : 0;
 
-          const explanations =
-            LAYER_EXPLANATIONS[layer.layerName] || {};
+          const theme = LAYER_THEME[layer.layerNumber] || LAYER_THEME[1];
+          const narrative = getLayerNarrative(layer.layerName, layer.subScores);
+          const chartHeight = Math.max(200, layer.subScores.length * 36);
 
           return (
             <AccordionItem
               key={layer.layerNumber}
               value={`layer-${layer.layerNumber}`}
-              className="border rounded-lg px-4"
+              className={`border rounded-lg px-4 border-l-4 ${theme.border}`}
             >
               <AccordionTrigger className="hover:no-underline">
                 <div className="flex items-center gap-3 text-left">
+                  {theme.icon}
                   <Badge variant="outline" className="text-xs shrink-0">
                     L{layer.layerNumber}
                   </Badge>
@@ -213,10 +109,16 @@ const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
                 </div>
               </AccordionTrigger>
               <AccordionContent>
-                <p className="text-sm text-muted-foreground mb-4">{layer.description}</p>
+                {/* Dynamic narrative */}
+                <div className={`p-3 rounded-lg ${theme.bg} mb-4`}>
+                  <p className="text-sm leading-relaxed text-foreground/80">
+                    {narrative || layer.description}
+                  </p>
+                </div>
 
+                {/* Bar chart */}
                 {layer.subScores.length > 0 && (
-                  <div className="h-[250px] mb-6">
+                  <div style={{ height: chartHeight }} className="mb-6">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
                         data={layer.subScores}
@@ -239,9 +141,21 @@ const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
                           }}
                           formatter={(value: number) => [`${value.toFixed(2)}/5`, "Score"]}
                         />
+                        <ReferenceLine
+                          x={avgScore}
+                          stroke="hsl(var(--muted-foreground))"
+                          strokeDasharray="4 4"
+                          strokeOpacity={0.5}
+                          label={{
+                            value: `Avg: ${avgScore.toFixed(1)}`,
+                            fontSize: 10,
+                            fill: "hsl(var(--muted-foreground))",
+                            position: "top",
+                          }}
+                        />
                         <Bar dataKey="score" radius={[0, 6, 6, 0]}>
                           {layer.subScores.map((entry, index) => (
-                            <Cell key={index} fill={getBarColor(entry.score)} />
+                            <Cell key={index} fill={getScoreBarHsl(entry.score)} />
                           ))}
                         </Bar>
                       </BarChart>
@@ -249,35 +163,57 @@ const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
                   </div>
                 )}
 
-                {/* Sub-layer explanations */}
-                <div className="space-y-3">
+                {/* Sub-score cards */}
+                <div className="space-y-2">
                   {layer.subScores.map((sub) => {
-                    const exp = explanations[sub.name];
-                    const explanation =
-                      exp
-                        ? sub.score >= 3.5
-                          ? exp.high
-                          : exp.low
-                        : null;
+                    const tier = getScoreTier(sub.score);
+                    const colors = getScoreColor(sub.score);
+                    const cardKey = `${layer.layerNumber}-${sub.name}`;
+                    const isExpanded = expandedCards[cardKey];
+                    const relevantCareers = getCareerRelevanceForCategory(sub.name);
 
                     return (
                       <div
                         key={sub.name}
-                        className="p-3 rounded-lg bg-muted/50 border border-border/50"
+                        className={`rounded-lg border border-border/50 transition-colors ${
+                          isExpanded ? theme.bg : "bg-muted/30 hover:bg-muted/50"
+                        }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="font-medium text-sm">{sub.name}</span>
-                          <Badge
-                            variant={sub.score >= 4 ? "default" : sub.score >= 3 ? "secondary" : "destructive"}
-                            className="text-xs"
-                          >
-                            {sub.score.toFixed(1)}/5
-                          </Badge>
-                        </div>
-                        {explanation && (
-                          <p className="text-xs text-muted-foreground leading-relaxed">
-                            {explanation}
-                          </p>
+                        <button
+                          onClick={() => toggleCard(cardKey)}
+                          className="w-full p-3 flex items-center justify-between text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-sm">{sub.name}</span>
+                            <Badge
+                              variant={sub.score >= 4 ? "default" : sub.score >= 3 ? "secondary" : "destructive"}
+                              className="text-xs"
+                            >
+                              {sub.score.toFixed(1)}/5
+                            </Badge>
+                            <span className={`text-xs ${colors.text}`}>{tier.label}</span>
+                          </div>
+                          <ChevronDown
+                            className={`h-4 w-4 text-muted-foreground transition-transform ${
+                              isExpanded ? "rotate-180" : ""
+                            }`}
+                          />
+                        </button>
+                        {isExpanded && (
+                          <div className="px-3 pb-3 space-y-2 animate-fade-in">
+                            <p className="text-xs text-muted-foreground leading-relaxed">
+                              {getScoreInterpretation(sub.score, sub.name)}
+                            </p>
+                            {relevantCareers.length > 0 && (
+                              <div className="flex items-start gap-1.5 pt-1">
+                                <Briefcase className="h-3.5 w-3.5 text-muted-foreground mt-0.5 shrink-0" />
+                                <p className="text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground/70">Career relevance: </span>
+                                  {relevantCareers.join(", ")}
+                                </p>
+                              </div>
+                            )}
+                          </div>
                         )}
                       </div>
                     );
