@@ -76,6 +76,7 @@ function useQuery() {
 const Results = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const q = useQuery();
   const assessId = q.get("assess");
 
