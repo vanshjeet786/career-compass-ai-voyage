@@ -102,6 +102,7 @@ type ResponseValue =
 const Assessment = () => {
   const { user, loading } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [assessmentId, setAssessmentId] = useState<string | null>(null);
   const [layer, setLayer] = useState<LayerKey>(1);
   const [responses, setResponses] = useState<Record<string, ResponseValue>>({});
