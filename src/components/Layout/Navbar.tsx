@@ -46,7 +46,7 @@ export const Navbar = () => {
   const navItems = [
     { label: "Home", path: "/", icon: Home },
     { label: "Dashboard", path: "/profile", icon: LayoutDashboard },
-    { label: "Results", path: "/results", icon: FileText },
+    
   ];
 
   const isActive = (path: string) => location.pathname === path;
@@ -122,10 +122,6 @@ export const Navbar = () => {
               <DropdownMenuItem onClick={() => navigate("/profile")}>
                 <User className="h-4 w-4 mr-2" />
                 Profile
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => navigate("/results")}>
-                <FileText className="h-4 w-4 mr-2" />
-                Latest Results
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/background-info")}>
                 <MessageSquare className="h-4 w-4 mr-2" />
