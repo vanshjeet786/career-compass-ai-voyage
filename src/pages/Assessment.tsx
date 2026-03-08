@@ -265,7 +265,8 @@ const Assessment = () => {
         body: { mode: 'suggest', question, context: { layer, responses } },
       });
       if (error) throw error;
-      const aiSuggestions = data.text.split('\n').filter((s: string) => s.trim()).slice(0, 3);
+      const rawText = data?.text || data?.generatedText || '';
+      const aiSuggestions = rawText.split('\n').filter((s: string) => s.trim()).slice(0, 3);
       setSuggestions(prev => ({ 
         ...prev, 
         [question]: [...(prev[question] || []), ...aiSuggestions] 
