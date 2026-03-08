@@ -46,7 +46,7 @@ export const Navbar = () => {
   const navItems = [
     { label: "Home", path: "/", icon: Home },
     { label: "Dashboard", path: "/profile", icon: LayoutDashboard },
-    { label: "Results", path: "/results", icon: FileText },
+    
   ];
 
   const isActive = (path: string) => location.pathname === path;
