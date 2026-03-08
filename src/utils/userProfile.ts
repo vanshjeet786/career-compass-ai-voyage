@@ -1,4 +1,25 @@
-import { RESPONSE_SCALE, LAYER_1_QUESTIONS, LAYER_2_QUESTIONS, LAYER_3_QUESTIONS, LAYER_4_QUESTIONS, LAYER_5_QUESTIONS } from '@/data/questions';
+import { RESPONSE_SCALE, LAYER_1_QUESTIONS, LAYER_2_QUESTIONS, LAYER_3_QUESTIONS, LAYER_4_QUESTIONS, LAYER_5_QUESTIONS, LAYER_6_QUESTIONS } from '@/data/questions';
+
+// Build a reverse lookup: question text → { category, layer }
+const questionToCategoryMap: Record<string, { category: string; layer: number }> = {};
+
+function buildMap(layerQuestions: Record<string, any>, layerNum: number) {
+  for (const [category, questions] of Object.entries(layerQuestions)) {
+    const qList = Array.isArray(questions) ? questions : (questions as any)?.questions || [];
+    for (const q of qList) {
+      if (typeof q === 'string') {
+        questionToCategoryMap[q] = { category, layer: layerNum };
+      }
+    }
+  }
+}
+
+buildMap(LAYER_1_QUESTIONS, 1);
+buildMap(LAYER_2_QUESTIONS, 2);
+buildMap(LAYER_3_QUESTIONS, 3);
+buildMap(LAYER_4_QUESTIONS, 4);
+buildMap(LAYER_5_QUESTIONS, 5);
+buildMap(LAYER_6_QUESTIONS, 6);
 
 export interface UserProfile {
   id?: string;
@@ -79,17 +100,21 @@ const APTITUDE_WEIGHTS: Record<string, number> = {
 };
 
 export function calculateCategoryScore(responses: ResponseData[], category: string, layer: number): number {
-  const categoryQuestions = responses.filter(r =>
-    r.layer_number === layer &&
-    r.question_id.includes(category)
-  );
+  const categoryQuestions = responses.filter(r => {
+    if (r.layer_number !== layer) return false;
+    const mapping = questionToCategoryMap[r.question_id];
+    return mapping?.category === category && mapping?.layer === layer;
+  });
 
   if (categoryQuestions.length === 0) return 0;
 
   const sum = categoryQuestions.reduce((acc, q) => {
-    if (q.response_value && 'value' in q.response_value) {
-      return acc + q.response_value.value;
+    const rv = q.response_value as any;
+    if (rv && typeof rv === 'object' && 'value' in rv) {
+      return acc + Number(rv.value);
     }
+    // Handle direct numeric values
+    if (typeof rv === 'number') return acc + rv;
     return acc;
   }, 0);
 
