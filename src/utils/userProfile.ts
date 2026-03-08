@@ -1,4 +1,25 @@
-import { RESPONSE_SCALE, LAYER_1_QUESTIONS, LAYER_2_QUESTIONS, LAYER_3_QUESTIONS, LAYER_4_QUESTIONS, LAYER_5_QUESTIONS } from '@/data/questions';
+import { RESPONSE_SCALE, LAYER_1_QUESTIONS, LAYER_2_QUESTIONS, LAYER_3_QUESTIONS, LAYER_4_QUESTIONS, LAYER_5_QUESTIONS, LAYER_6_QUESTIONS } from '@/data/questions';
+
+// Build a reverse lookup: question text → { category, layer }
+const questionToCategoryMap: Record<string, { category: string; layer: number }> = {};
+
+function buildMap(layerQuestions: Record<string, any>, layerNum: number) {
+  for (const [category, questions] of Object.entries(layerQuestions)) {
+    const qList = Array.isArray(questions) ? questions : (questions as any)?.questions || [];
+    for (const q of qList) {
+      if (typeof q === 'string') {
+        questionToCategoryMap[q] = { category, layer: layerNum };
+      }
+    }
+  }
+}
+
+buildMap(LAYER_1_QUESTIONS, 1);
+buildMap(LAYER_2_QUESTIONS, 2);
+buildMap(LAYER_3_QUESTIONS, 3);
+buildMap(LAYER_4_QUESTIONS, 4);
+buildMap(LAYER_5_QUESTIONS, 5);
+buildMap(LAYER_6_QUESTIONS, 6);
 
 export interface UserProfile {
   id?: string;
