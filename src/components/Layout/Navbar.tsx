@@ -178,8 +178,13 @@ export const Navbar = () => {
           })}
           <Button
             className="w-full justify-start gap-2 bg-primary text-primary-foreground hover:bg-primary/90"
-            onClick={() => {
-              navigate("/assessment");
+            onClick={async () => {
+              await supabase
+                .from("assessments")
+                .update({ status: "abandoned" })
+                .eq("user_id", user.id)
+                .eq("status", "in_progress");
+              navigate("/background-info");
               setMobileOpen(false);
             }}
           >
