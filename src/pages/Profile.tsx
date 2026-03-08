@@ -5,9 +5,24 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, LogOut, FileText, TrendingUp, User, Calendar, Eye, Download, BarChart3 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import {
+  Loader2,
+  FileText,
+  TrendingUp,
+  Calendar,
+  Eye,
+  Zap,
+  Target,
+  BarChart3,
+  Plus,
+  MessageSquare,
+  Trophy,
+  ArrowRight,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { generateUserProfile, generateCareerRecommendations } from "@/utils/userProfile";
 
 interface Assessment {
   id: string;
@@ -17,11 +32,13 @@ interface Assessment {
   current_layer: number;
 }
 
-interface ProfileStats {
+interface DashboardData {
   totalAssessments: number;
   completedAssessments: number;
-  averageScore: number;
   lastActivity: string;
+  topStrength: { category: string; score: number } | null;
+  topCareer: { title: string; compatibility: number } | null;
+  latestAssessmentId: string | null;
 }
 
 const Profile = () => {
@@ -29,309 +46,345 @@ const Profile = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [assessments, setAssessments] = useState<Assessment[]>([]);
-  const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [data, setData] = useState<DashboardData | null>(null);
   const [loadingData, setLoadingData] = useState(true);
 
-  // SEO setup
   useEffect(() => {
-    document.title = "Profile Dashboard - Career Compass";
-    const metaDesc = "Manage your career assessments, view insights, and track your progress.";
-    let descTag = document.querySelector('meta[name="description"]') as HTMLMetaElement | null;
-    if (!descTag) {
-      descTag = document.createElement('meta');
-      descTag.name = 'description';
-      document.head.appendChild(descTag);
-    }
-    descTag.content = metaDesc;
+    document.title = "Dashboard - Career Compass";
   }, []);
 
-  // Load user assessments and stats
   useEffect(() => {
     if (!user) return;
-    loadUserData();
+    loadDashboard();
   }, [user]);
 
-  const loadUserData = async () => {
+  const loadDashboard = async () => {
     try {
-      // Fetch user assessments
-      const { data: assessmentData, error: assessmentError } = await supabase
+      const { data: assessmentData, error } = await supabase
         .from("assessments")
         .select("id, status, started_at, completed_at, current_layer")
         .eq("user_id", user!.id)
         .order("started_at", { ascending: false });
 
-      if (assessmentError) throw assessmentError;
+      if (error) throw error;
       setAssessments(assessmentData || []);
 
-      // Calculate stats
-      const totalAssessments = assessmentData?.length || 0;
-      const completedAssessments = assessmentData?.filter(a => a.status === 'completed').length || 0;
-      
-      // Get average score from completed assessments
-      let averageScore = 0;
-      if (completedAssessments > 0) {
-        const { data: responseData } = await supabase
-          .from("assessment_responses")
-          .select("response_value, assessment_id")
-          .in("assessment_id", assessmentData?.filter(a => a.status === 'completed').map(a => a.id) || []);
+      const total = assessmentData?.length || 0;
+      const completed = assessmentData?.filter((a) => a.status === "completed") || [];
+      const lastActivity = assessmentData?.[0]?.started_at || new Date().toISOString();
+      const latestCompleted = completed[0] || null;
 
-          if (responseData && responseData.length > 0) {
-            const scores = responseData
-              .filter(r => r.response_value && typeof r.response_value === 'object' && 'value' in r.response_value)
-              .map(r => (r.response_value as any).value as number);
-          
-          averageScore = scores.reduce((sum, score) => sum + score, 0) / scores.length;
+      let topStrength: DashboardData["topStrength"] = null;
+      let topCareer: DashboardData["topCareer"] = null;
+      let latestAssessmentId: string | null = latestCompleted?.id || null;
+
+      if (latestCompleted) {
+        // Fetch responses for the latest completed assessment
+        const { data: responses } = await supabase
+          .from("assessment_responses")
+          .select("question_id, response_value, layer_number")
+          .eq("assessment_id", latestCompleted.id);
+
+        if (responses && responses.length > 0) {
+          const profile = generateUserProfile(
+            responses.map((r) => ({
+              question_id: r.question_id,
+              response_value: r.response_value,
+              layer_number: r.layer_number,
+            })),
+            latestCompleted.id
+          );
+
+          // Top strength
+          if (profile.overallScores.topStrengths.length > 0) {
+            const top = profile.overallScores.topStrengths[0];
+            topStrength = { category: top.category, score: top.score };
+          }
+
+          // Top career
+          const careers = generateCareerRecommendations(profile);
+          if (careers.length > 0) {
+            const best = careers.sort((a, b) => b.compatibilityScore - a.compatibilityScore)[0];
+            topCareer = { title: best.title, compatibility: best.compatibilityScore };
+          }
         }
       }
 
-      const lastActivity = assessmentData?.[0]?.started_at || new Date().toISOString();
-
-      setStats({
-        totalAssessments,
-        completedAssessments,
-        averageScore: Number(averageScore.toFixed(1)),
-        lastActivity
+      setData({
+        totalAssessments: total,
+        completedAssessments: completed.length,
+        lastActivity,
+        topStrength,
+        topCareer,
+        latestAssessmentId,
       });
     } catch (error: any) {
       toast({
-        title: "Error loading profile data",
+        title: "Error loading dashboard",
         description: error.message,
-        variant: "destructive"
+        variant: "destructive",
       });
     } finally {
       setLoadingData(false);
     }
   };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      navigate("/auth");
-    } catch (error: any) {
-      toast({
-        title: "Sign out error",
-        description: error.message,
-        variant: "destructive"
-      });
-    }
-  };
-
-  const viewResults = (assessmentId: string) => {
-    navigate(`/results?assess=${assessmentId}`);
-  };
-
-  const continueAssessment = (assessmentId: string) => {
-    navigate(`/assessment`);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
-  };
 
   if (loading || loadingData) {
     return (
       <div className="min-h-screen grid place-items-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   if (!user) return <Navigate to="/auth" replace />;
 
+  const completionRate =
+    data && data.totalAssessments > 0
+      ? Math.round((data.completedAssessments / data.totalAssessments) * 100)
+      : 0;
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <div className="container py-12 max-w-7xl">
+    <main className="min-h-screen bg-background">
+      <div className="container py-8 max-w-6xl space-y-8">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between mb-12 gap-6 animate-fade-in">
-          <div className="text-center md:text-left">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-2 rounded-full text-sm font-medium mb-4">
-              <User className="h-4 w-4" />
-              Profile Dashboard
-            </div>
-            <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-primary via-accent to-primary bg-clip-text text-transparent mb-4">
-              Welcome back!
-            </h1>
-            <p className="text-xl text-muted-foreground max-w-2xl">
-              Manage your career assessments and track your progress
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button
-              onClick={() => navigate('/assessment')}
-              size="lg"
-              className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-primary-foreground shadow-lg hover:shadow-xl transition-all duration-200"
-            >
-              <FileText className="h-5 w-5 mr-2" />
-              New Assessment
-            </Button>
-            <Button
-              onClick={handleSignOut}
-              variant="outline"
-              size="lg"
-              className="hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30"
-            >
-              <LogOut className="h-5 w-5 mr-2" />
-              Sign Out
-            </Button>
-          </div>
+        <div className="animate-fade-in">
+          <h1 className="text-3xl font-bold text-foreground">Dashboard</h1>
+          <p className="text-muted-foreground mt-1">
+            Your career assessment overview
+          </p>
         </div>
 
-        {/* Stats Overview */}
-        {stats && (
-          <div className="grid md:grid-cols-4 gap-6 mb-12">
-            <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm" style={{ animationDelay: '100ms' }}>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 rounded-full">
-                    <FileText className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats.totalAssessments}</p>
-                    <p className="text-sm text-muted-foreground">Total Assessments</p>
-                  </div>
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 animate-fade-in">
+          <Button
+            onClick={() => navigate("/assessment")}
+            className="h-auto py-4 px-5 bg-primary text-primary-foreground hover:bg-primary/90 justify-start gap-3"
+          >
+            <div className="p-2 bg-primary-foreground/20 rounded-lg">
+              <Plus className="h-5 w-5" />
+            </div>
+            <div className="text-left">
+              <div className="font-semibold">New Assessment</div>
+              <div className="text-xs opacity-80">Start a fresh evaluation</div>
+            </div>
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() =>
+              data?.latestAssessmentId
+                ? navigate(`/results?assess=${data.latestAssessmentId}`)
+                : navigate("/results")
+            }
+            className="h-auto py-4 px-5 justify-start gap-3 border-border hover:bg-muted"
+          >
+            <div className="p-2 bg-primary/10 rounded-lg">
+              <BarChart3 className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-left">
+              <div className="font-semibold text-foreground">View Results</div>
+              <div className="text-xs text-muted-foreground">See latest insights</div>
+            </div>
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => navigate("/background-info")}
+            className="h-auto py-4 px-5 justify-start gap-3 border-border hover:bg-muted"
+          >
+            <div className="p-2 bg-accent/10 rounded-lg">
+              <MessageSquare className="h-5 w-5 text-accent" />
+            </div>
+            <div className="text-left">
+              <div className="font-semibold text-foreground">Background Info</div>
+              <div className="text-xs text-muted-foreground">Update your profile</div>
+            </div>
+          </Button>
+        </div>
+
+        {/* Stats Grid */}
+        {data && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in">
+            {/* Top Strength */}
+            <Card className="border-border bg-card">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Trophy className="h-4 w-4 text-secondary" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Top Strength
+                  </span>
                 </div>
+                {data.topStrength ? (
+                  <>
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {data.topStrength.category}
+                    </p>
+                    <p className="text-2xl font-bold text-primary mt-1">
+                      {data.topStrength.score}
+                      <span className="text-sm text-muted-foreground font-normal">/5</span>
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Complete an assessment</p>
+                )}
               </CardContent>
             </Card>
 
-            <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm" style={{ animationDelay: '200ms' }}>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-accent/10 rounded-full">
-                    <TrendingUp className="h-6 w-6 text-accent" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats.completedAssessments}</p>
-                    <p className="text-sm text-muted-foreground">Completed</p>
-                  </div>
+            {/* Top Career */}
+            <Card className="border-border bg-card">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Target className="h-4 w-4 text-accent" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Top Match
+                  </span>
                 </div>
+                {data.topCareer ? (
+                  <>
+                    <p className="text-sm font-semibold text-foreground truncate">
+                      {data.topCareer.title}
+                    </p>
+                    <p className="text-2xl font-bold text-accent mt-1">
+                      {data.topCareer.compatibility}
+                      <span className="text-sm text-muted-foreground font-normal">%</span>
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Complete an assessment</p>
+                )}
               </CardContent>
             </Card>
 
-            <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm" style={{ animationDelay: '300ms' }}>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-secondary/10 rounded-full">
-                    <BarChart3 className="h-6 w-6 text-secondary" />
-                  </div>
-                  <div>
-                    <p className="text-2xl font-bold">{stats.averageScore}/5</p>
-                    <p className="text-sm text-muted-foreground">Average Score</p>
-                  </div>
+            {/* Progress */}
+            <Card className="border-border bg-card">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Zap className="h-4 w-4 text-primary" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Completion
+                  </span>
                 </div>
+                <p className="text-2xl font-bold text-foreground">
+                  {data.completedAssessments}
+                  <span className="text-sm text-muted-foreground font-normal">
+                    /{data.totalAssessments}
+                  </span>
+                </p>
+                <Progress value={completionRate} className="h-1.5 mt-2" />
               </CardContent>
             </Card>
 
-            <Card className="animate-fade-in border-0 shadow-lg bg-card/50 backdrop-blur-sm" style={{ animationDelay: '400ms' }}>
-              <CardContent className="p-6">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-primary/10 rounded-full">
-                    <Calendar className="h-6 w-6 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold">{formatDate(stats.lastActivity).split(',')[0]}</p>
-                    <p className="text-sm text-muted-foreground">Last Activity</p>
-                  </div>
+            {/* Last Activity */}
+            <Card className="border-border bg-card">
+              <CardContent className="p-5">
+                <div className="flex items-center gap-2 mb-3">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Last Active
+                  </span>
                 </div>
+                <p className="text-sm font-semibold text-foreground">
+                  {formatDate(data.lastActivity)}
+                </p>
               </CardContent>
             </Card>
           </div>
         )}
 
         {/* Assessment History */}
-        <Card className="animate-fade-in border-0 shadow-xl bg-card/50 backdrop-blur-sm" style={{ animationDelay: '500ms' }}>
-          <CardHeader className="bg-gradient-to-r from-primary/10 to-accent/10 border-b">
-            <CardTitle className="text-2xl flex items-center gap-3">
-              <div className="w-3 h-3 rounded-full bg-gradient-to-r from-primary to-accent" />
+        <Card className="border-border bg-card animate-fade-in">
+          <CardHeader className="pb-4">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
               Assessment History
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-8">
+          <CardContent>
             {assessments.length === 0 ? (
               <div className="text-center py-12">
-                <FileText className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No assessments yet</h3>
-                <p className="text-muted-foreground mb-6">Take your first career assessment to get started!</p>
-                <Button
-                  onClick={() => navigate('/assessment')}
-                  className="bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90"
-                >
+                <FileText className="h-12 w-12 text-muted-foreground/40 mx-auto mb-3" />
+                <h3 className="font-semibold text-foreground mb-1">No assessments yet</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Take your first career assessment to get started
+                </p>
+                <Button onClick={() => navigate("/assessment")} size="sm">
                   Start Assessment
                 </Button>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-2">
                 {assessments.map((assessment, index) => (
                   <div
                     key={assessment.id}
-                    className="flex items-center justify-between p-6 rounded-xl border border-border/50 hover:border-primary/20 hover:shadow-md transition-all duration-300 bg-background/50"
+                    className="flex items-center justify-between p-4 rounded-lg border border-border hover:bg-muted/50 transition-colors"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className={`p-3 rounded-full ${
-                        assessment.status === 'completed' 
-                          ? 'bg-accent/10' 
-                          : 'bg-primary/10'
-                      }`}>
-                        {assessment.status === 'completed' ? (
-                          <TrendingUp className={`h-5 w-5 ${assessment.status === 'completed' ? 'text-accent' : 'text-primary'}`} />
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div
+                        className={`p-2 rounded-lg shrink-0 ${
+                          assessment.status === "completed"
+                            ? "bg-accent/10"
+                            : "bg-primary/10"
+                        }`}
+                      >
+                        {assessment.status === "completed" ? (
+                          <TrendingUp className="h-4 w-4 text-accent" />
                         ) : (
-                          <FileText className={`h-5 w-5 ${assessment.status === 'completed' ? 'text-accent' : 'text-primary'}`} />
+                          <FileText className="h-4 w-4 text-primary" />
                         )}
                       </div>
-                      <div>
-                        <h3 className="font-semibold">
+                      <div className="min-w-0">
+                        <p className="font-medium text-sm text-foreground">
                           Assessment #{assessments.length - index}
-                        </h3>
-                        <div className="flex items-center gap-3 mt-1">
-                          <Badge 
-                            variant={assessment.status === 'completed' ? 'default' : 'secondary'}
-                            className={assessment.status === 'completed' ? 'bg-accent/20 text-accent' : 'bg-primary/20 text-primary'}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <Badge
+                            variant={assessment.status === "completed" ? "default" : "secondary"}
+                            className={`text-xs ${
+                              assessment.status === "completed"
+                                ? "bg-accent/15 text-accent border-accent/20"
+                                : "bg-primary/15 text-primary border-primary/20"
+                            }`}
                           >
-                            {assessment.status === 'completed' ? 'Completed' : `Layer ${assessment.current_layer}/6`}
+                            {assessment.status === "completed"
+                              ? "Completed"
+                              : `Layer ${assessment.current_layer}/6`}
                           </Badge>
-                          <Separator orientation="vertical" className="h-4" />
-                          <span className="text-sm text-muted-foreground">
-                            Started {formatDate(assessment.started_at)}
+                          <span className="text-xs text-muted-foreground">
+                            {formatDate(assessment.started_at)}
                           </span>
-                          {assessment.completed_at && (
-                            <>
-                              <Separator orientation="vertical" className="h-4" />
-                              <span className="text-sm text-muted-foreground">
-                                Completed {formatDate(assessment.completed_at)}
-                              </span>
-                            </>
-                          )}
                         </div>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      {assessment.status === 'completed' ? (
-                        <Button
-                          onClick={() => viewResults(assessment.id)}
-                          variant="outline"
-                          size="sm"
-                          className="hover:bg-accent/10 hover:text-accent hover:border-accent/30"
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          View Results
-                        </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() =>
+                        assessment.status === "completed"
+                          ? navigate(`/results?assess=${assessment.id}`)
+                          : navigate("/assessment")
+                      }
+                      className="shrink-0 gap-1 text-muted-foreground hover:text-primary"
+                    >
+                      {assessment.status === "completed" ? (
+                        <>
+                          <Eye className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">View</span>
+                        </>
                       ) : (
-                        <Button
-                          onClick={() => continueAssessment(assessment.id)}
-                          variant="outline" 
-                          size="sm"
-                          className="hover:bg-primary/10 hover:text-primary hover:border-primary/30"
-                        >
-                          <FileText className="h-4 w-4 mr-2" />
-                          Continue
-                        </Button>
+                        <>
+                          <ArrowRight className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Continue</span>
+                        </>
                       )}
-                    </div>
+                    </Button>
                   </div>
                 ))}
               </div>
