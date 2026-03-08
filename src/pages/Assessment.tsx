@@ -233,15 +233,25 @@ const Assessment = () => {
     const predetermined = PREDETERMINED_SUGGESTIONS[question];
     if (predetermined) {
       setSuggestions(prev => ({ ...prev, [question]: predetermined }));
-    } else if (layer === 6) {
+      setAiLoading(null);
+    } else {
+      // No predetermined suggestions — call AI
       try {
-        // Fallback: no predetermined suggestions available
-      } catch (e) {
-        console.error(e);
+        const { data, error } = await supabase.functions.invoke("gemini-assist", {
+          body: { mode: 'suggest', question, context: { layer, responses } },
+        });
+        if (error) throw error;
+        const text = data?.text || data?.generatedText || '';
+        const aiSuggestions = text.split('\n').filter((s: string) => s.trim()).slice(0, 3);
+        if (aiSuggestions.length > 0) {
+          setSuggestions(prev => ({ ...prev, [question]: aiSuggestions }));
+        }
+      } catch (e: any) {
+        toast({ title: "AI error", description: e.message || "Failed to get suggestions", variant: "destructive" });
+      } finally {
+        setAiLoading(null);
       }
     }
-    
-    setAiLoading(null);
   };
 
   const handleAISuggestions = async (question: string) => {
