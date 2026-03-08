@@ -320,7 +320,7 @@ const Assessment = () => {
       if (done) {
         await supabase.from("assessments").update({ status: "completed", completed_at: new Date().toISOString() }).eq("id", assessmentId);
         toast({ title: "Assessment completed", description: "View your results now." });
-        window.location.href = "/results?assess=" + assessmentId;
+        navigate("/results?assess=" + assessmentId);
       } else {
         setLayer(next);
         await supabase.from("assessments").update({ current_layer: next }).eq("id", assessmentId);
