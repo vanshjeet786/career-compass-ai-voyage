@@ -513,16 +513,11 @@ const Results = () => {
         {/* ─── Bottom Actions ──────────────────────────────────────── */}
         <Card>
           <CardContent className="pt-6">
-            <div className="flex gap-3 flex-wrap">
-              <Button asChild variant="outline">
-                <Link to="/assessment">
-                  Retake Assessment <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild>
-                <Link to="/profile">Update Profile</Link>
-              </Button>
-            </div>
+            <Button asChild variant="outline">
+              <Link to="/assessment">
+                Retake Assessment <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </section>
