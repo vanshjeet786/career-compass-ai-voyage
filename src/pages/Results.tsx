@@ -370,16 +370,6 @@ const Results = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen grid place-items-center">
-        <Loader2 className="h-6 w-6 animate-spin" />
-      </div>
-    );
-  }
-
-  if (!user) return <Navigate to="/auth" replace />;
-
   // Auto-redirect to latest completed assessment if no ID in URL
   useEffect(() => {
     if (assessId || !user || loading) return;
@@ -396,6 +386,16 @@ const Results = () => {
       }
     })();
   }, [assessId, user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Loader2 className="h-6 w-6 animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) return <Navigate to="/auth" replace />;
 
   if (!assessId) {
     return (
