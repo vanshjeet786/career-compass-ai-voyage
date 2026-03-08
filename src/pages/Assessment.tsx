@@ -187,12 +187,12 @@ const Assessment = () => {
       return next;
     });
     try {
-      await supabase.from("assessment_responses").insert({
+      await supabase.from("assessment_responses").upsert({
         assessment_id: assessmentId,
         layer_number: layer,
         question_id: questionId,
-        response_value: value,
-      });
+        response_value: value as any,
+      }, { onConflict: "assessment_id,question_id" });
     } catch (error: any) {
       toast({ title: "Error saving response", description: error.message, variant: "destructive" });
     }
