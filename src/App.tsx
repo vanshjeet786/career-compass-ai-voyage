@@ -10,6 +10,7 @@ import Assessment from "./pages/Assessment";
 import BackgroundInfo from "./pages/BackgroundInfo";
 import Results from "./pages/Results";
 import Profile from "./pages/Profile";
+import Account from "./pages/Account";
 import { Navbar } from "./components/Layout/Navbar";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/assess" element={<Assessment />} />
           <Route path="/results" element={<Results />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/account" element={<Account />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

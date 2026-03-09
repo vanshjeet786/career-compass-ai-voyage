@@ -87,6 +87,27 @@ export type Database = {
           },
         ]
       }
+      background_info_history: {
+        Row: {
+          id: string
+          user_id: string
+          background_info: Json
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          background_info: Json
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          background_info?: Json
+          created_at?: string | null
+        }
+        Relationships: []
+      }
       assessments: {
         Row: {
           background_info: Json | null
