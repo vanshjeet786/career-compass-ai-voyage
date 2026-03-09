@@ -8,7 +8,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Loader2, HelpCircle, Lightbulb, ArrowRight, ArrowLeft, Plus } from "lucide-react";
+import { Loader2, HelpCircle, Lightbulb, ArrowRight, ArrowLeft, Plus, History } from "lucide-react";
+import { usePreviousResponses } from "@/hooks/usePreviousResponses";
+import { PREDETERMINED_EXPLANATIONS } from "@/data/explanations";
 import {
   RESPONSE_SCALE,
   LAYER_1_QUESTIONS,
@@ -114,6 +116,9 @@ const Assessment = () => {
   const [validationErrors, setValidationErrors] = useState<Set<string>>(new Set());
   const questionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Previous answer comparison for repeat assessments
+  const { hasPreviousAssessment, getPreviousAnswerHint } = usePreviousResponses(assessmentId);
+
   // SEO: title, description, canonical
   useEffect(() => {
     const title = `Career Compass Assessment - Layer ${layer}`;
@@ -204,12 +209,22 @@ const Assessment = () => {
 
   const handleExplanation = async (question: string) => {
     if (explanations[question]) return;
+
+    // Try predetermined explanation first (no AI call needed)
+    const predetermined = PREDETERMINED_EXPLANATIONS[question];
+    if (predetermined) {
+      setExplanations(prev => ({ ...prev, [question]: predetermined }));
+      return;
+    }
+
+    // Fall back to AI
     setAiLoading(question + 'explain');
     try {
       const context = { topStrengths: [], backgroundInfo: {} };
       const text = await aiService.chatResponse(`Explain why this question is important: "${question}"`, [], context);
       setExplanations(prev => ({ ...prev, [question]: text }));
     } catch (error: any) {
+      setExplanations(prev => ({ ...prev, [question]: "This question helps us understand your strengths and preferences to provide better career recommendations." }));
       toast({ title: "AI error", description: error.message, variant: "destructive" });
     } finally {
       setAiLoading(null);
@@ -239,7 +254,7 @@ const Assessment = () => {
       setSuggestions(prev => ({ ...prev, [question]: predetermined }));
       setAiLoading(null);
     } else {
-      // No predetermined suggestions — call AI
+      // No predetermined suggestions — call AI with fallback
       try {
         const { data, error } = await supabase.functions.invoke("gemini-assist", {
           body: { mode: 'suggest', question, context: { layer, responses } },
@@ -249,9 +264,19 @@ const Assessment = () => {
         const aiSuggestions = text.split('\n').filter((s: string) => s.trim()).slice(0, 3);
         if (aiSuggestions.length > 0) {
           setSuggestions(prev => ({ ...prev, [question]: aiSuggestions }));
+        } else {
+          throw new Error("Empty response");
         }
       } catch (e: any) {
-        toast({ title: "AI error", description: e.message || "Failed to get suggestions", variant: "destructive" });
+        // Fallback suggestions when AI fails
+        setSuggestions(prev => ({
+          ...prev,
+          [question]: [
+            "Reflect on your personal experiences and what excites you most.",
+            "Think about your strengths and how they align with potential careers.",
+            "Consider both short-term interests and long-term career goals."
+          ]
+        }));
       } finally {
         setAiLoading(null);
       }
@@ -558,6 +583,16 @@ const Assessment = () => {
                             )}
                           </div>
                         </div>
+
+                        {/* Previous answer comparison hint */}
+                        {hasPreviousAssessment && getPreviousAnswerHint(q) && (
+                          <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/50 border border-border/30 text-sm animate-fade-in">
+                            <History className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                            <span className="text-muted-foreground">
+                              Previously answered: <span className="font-medium text-foreground/80">{getPreviousAnswerHint(q)}</span>
+                            </span>
+                          </div>
+                        )}
 
                         {renderQuestionInput(q, category)}
 
