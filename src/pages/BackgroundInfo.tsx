@@ -4,12 +4,14 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, ArrowRight, User, GraduationCap, MapPin, Target } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
+import { Combobox } from "@/components/ui/combobox";
+import { INDIAN_DEGREES, SPECIALIZATIONS, JOB_TITLES, EDUCATION_LEVELS } from "@/data/backgroundOptions";
 
 const BackgroundInfo = () => {
   const { user } = useAuth();
@@ -118,7 +120,14 @@ const BackgroundInfo = () => {
               <div className="grid gap-4 md:grid-cols-2 animate-in fade-in slide-in-from-top-4 duration-300">
                 <div className="space-y-2">
                   <Label htmlFor="jobTitle">Current Job Title</Label>
-                  <Input id="jobTitle" placeholder="e.g. Software Engineer" value={formData.jobTitle} onChange={(e) => setFormData({...formData, jobTitle: e.target.value})} />
+                  <Combobox
+                    options={JOB_TITLES}
+                    value={formData.jobTitle}
+                    onValueChange={(v) => setFormData({...formData, jobTitle: v})}
+                    placeholder="Search or type your job title..."
+                    searchPlaceholder="Search job titles..."
+                    emptyMessage="No matching title found."
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="yearsExp">Years of Experience</Label>
@@ -130,12 +139,26 @@ const BackgroundInfo = () => {
             {(userType === "student" || userType === "graduate") && (
               <div className="grid gap-4 md:grid-cols-2 animate-in fade-in slide-in-from-top-4 duration-300">
                 <div className="space-y-2">
-                  <Label htmlFor="field">Field of Study</Label>
-                  <Input id="field" placeholder="e.g. Computer Science" value={formData.fieldOfStudy} onChange={(e) => setFormData({...formData, fieldOfStudy: e.target.value})} />
+                  <Label htmlFor="field">Degree / Field of Study</Label>
+                  <Combobox
+                    options={INDIAN_DEGREES}
+                    value={formData.fieldOfStudy}
+                    onValueChange={(v) => setFormData({...formData, fieldOfStudy: v})}
+                    placeholder="Search degrees (e.g. B.Tech, MBA)..."
+                    searchPlaceholder="Search degrees..."
+                    emptyMessage="No matching degree found."
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="spec">Specialization (Optional)</Label>
-                  <Input id="spec" placeholder="e.g. AI / Data Science" value={formData.specialization} onChange={(e) => setFormData({...formData, specialization: e.target.value})} />
+                  <Combobox
+                    options={SPECIALIZATIONS}
+                    value={formData.specialization}
+                    onValueChange={(v) => setFormData({...formData, specialization: v})}
+                    placeholder="Search specializations..."
+                    searchPlaceholder="Search specializations..."
+                    emptyMessage="No matching specialization found."
+                  />
                 </div>
               </div>
             )}
@@ -181,12 +204,9 @@ const BackgroundInfo = () => {
                         <SelectValue placeholder="Select education level" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="high-school">High School</SelectItem>
-                        <SelectItem value="diploma">Diploma / Certificate</SelectItem>
-                        <SelectItem value="bachelors">Bachelor's Degree</SelectItem>
-                        <SelectItem value="masters">Master's Degree</SelectItem>
-                        <SelectItem value="phd">PhD / Doctorate</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        {EDUCATION_LEVELS.map((level) => (
+                          <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

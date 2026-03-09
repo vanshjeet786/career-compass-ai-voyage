@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +23,20 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { generateUserProfile, generateCareerRecommendations } from "@/utils/userProfile";
+import {
+  type ViewMode,
+  type Timeframe,
+  type AssessmentWithScores,
+  filterByTimeframe,
+  calculateImprovements,
+  calculateTopStrengths,
+  calculateCareerMatches,
+} from "@/utils/assessmentAnalytics";
+import { ViewModeSelector } from "@/components/dashboard/ViewModeSelector";
+import { TimeframeFilter } from "@/components/dashboard/TimeframeFilter";
+import { ImprovementsCard } from "@/components/dashboard/ImprovementsCard";
+import { StrengthsCard } from "@/components/dashboard/StrengthsCard";
+import { CareerMatchesCard } from "@/components/dashboard/CareerMatchesCard";
 
 interface Assessment {
   id: string;
@@ -48,6 +62,9 @@ const Profile = () => {
   const [assessments, setAssessments] = useState<Assessment[]>([]);
   const [data, setData] = useState<DashboardData | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [viewMode, setViewMode] = useState<ViewMode>('latest');
+  const [timeframe, setTimeframe] = useState<Timeframe>('all');
+  const [assessmentsWithScores, setAssessmentsWithScores] = useState<AssessmentWithScores[]>([]);
 
   useEffect(() => {
     document.title = "Dashboard - Career Compass";
@@ -57,6 +74,26 @@ const Profile = () => {
     if (!user) return;
     loadDashboard();
   }, [user]);
+
+  const filteredAssessments = useMemo(
+    () => filterByTimeframe(assessmentsWithScores, timeframe),
+    [assessmentsWithScores, timeframe]
+  );
+
+  const improvements = useMemo(
+    () => calculateImprovements(filteredAssessments, viewMode),
+    [filteredAssessments, viewMode]
+  );
+
+  const strengths = useMemo(
+    () => calculateTopStrengths(filteredAssessments, viewMode),
+    [filteredAssessments, viewMode]
+  );
+
+  const careerMatches = useMemo(
+    () => calculateCareerMatches(filteredAssessments, viewMode),
+    [filteredAssessments, viewMode]
+  );
 
   const loadDashboard = async () => {
     try {
@@ -76,14 +113,16 @@ const Profile = () => {
 
       let topStrength: DashboardData["topStrength"] = null;
       let topCareer: DashboardData["topCareer"] = null;
-      let latestAssessmentId: string | null = latestCompleted?.id || null;
+      const latestAssessmentId: string | null = latestCompleted?.id || null;
 
-      if (latestCompleted) {
-        // Fetch responses for the latest completed assessment
+      // Fetch responses for ALL completed assessments (for analytics)
+      const scoredAssessments: AssessmentWithScores[] = [];
+
+      for (const ca of completed) {
         const { data: responses } = await supabase
           .from("assessment_responses")
           .select("question_id, response_value, layer_number")
-          .eq("assessment_id", latestCompleted.id);
+          .eq("assessment_id", ca.id);
 
         if (responses && responses.length > 0) {
           const profile = generateUserProfile(
@@ -92,23 +131,37 @@ const Profile = () => {
               response_value: r.response_value,
               layer_number: r.layer_number,
             })),
-            latestCompleted.id
+            ca.id
           );
 
-          // Top strength
-          if (profile.overallScores.topStrengths.length > 0) {
-            const top = profile.overallScores.topStrengths[0];
-            topStrength = { category: top.category, score: top.score };
-          }
-
-          // Top career
           const careers = generateCareerRecommendations(profile);
-          if (careers.length > 0) {
-            const best = careers.sort((a, b) => b.compatibilityScore - a.compatibilityScore)[0];
-            topCareer = { title: best.title, compatibility: best.compatibilityScore };
+          const allScores: Record<string, number> = {
+            ...profile.intelligenceScores,
+            ...profile.personalityTraits,
+            ...profile.aptitudes,
+          };
+
+          scoredAssessments.push({
+            id: ca.id,
+            completed_at: ca.completed_at || ca.started_at,
+            scores: allScores,
+            recommended_careers: careers.slice(0, 5).map(c => c.title),
+          });
+
+          // Use the latest completed for summary stats
+          if (ca.id === latestCompleted?.id) {
+            if (profile.overallScores.topStrengths.length > 0) {
+              const top = profile.overallScores.topStrengths[0];
+              topStrength = { category: top.category, score: top.score };
+            }
+            if (careers.length > 0) {
+              topCareer = { title: careers[0].title, compatibility: careers[0].compatibilityScore };
+            }
           }
         }
       }
+
+      setAssessmentsWithScores(scoredAssessments);
 
       setData({
         totalAssessments: total,
@@ -278,6 +331,28 @@ const Profile = () => {
                 </p>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Analytics Section */}
+        {data && data.completedAssessments > 0 && (
+          <div className="space-y-4 animate-fade-in">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <BarChart3 className="h-5 w-5 text-primary" />
+                Assessment Analytics
+              </h2>
+              <div className="flex items-center gap-3">
+                <TimeframeFilter value={timeframe} onValueChange={setTimeframe} />
+                <ViewModeSelector value={viewMode} onValueChange={setViewMode} />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <ImprovementsCard improvements={improvements} />
+              <StrengthsCard strengths={strengths} />
+              <CareerMatchesCard matches={careerMatches} />
+            </div>
           </div>
         )}
 
