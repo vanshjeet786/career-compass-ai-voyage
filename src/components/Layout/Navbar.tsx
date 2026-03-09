@@ -119,7 +119,7 @@ export const Navbar = () => {
                 <p className="text-xs text-muted-foreground truncate">{user.email}</p>
               </div>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate("/profile")}>
+              <DropdownMenuItem onClick={() => navigate("/account")}>
                 <User className="h-4 w-4 mr-2" />
                 Profile
               </DropdownMenuItem>

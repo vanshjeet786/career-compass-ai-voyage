@@ -1,63 +1,72 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useBackgroundInfo } from "@/hooks/useBackgroundInfo";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Loader2, ArrowRight, User, GraduationCap, MapPin, Target } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useToast } from "@/components/ui/use-toast";
-import { Combobox } from "@/components/ui/combobox";
-import { INDIAN_DEGREES, SPECIALIZATIONS, JOB_TITLES, EDUCATION_LEVELS } from "@/data/backgroundOptions";
+import { BackgroundInfoView } from "@/components/background-info/BackgroundInfoView";
+import { BackgroundInfoForm } from "@/components/background-info/BackgroundInfoForm";
+import { BackgroundInfoHistory } from "@/components/background-info/BackgroundInfoHistory";
+import { BackgroundInfoEmpty } from "@/components/background-info/BackgroundInfoEmpty";
+import type { BackgroundInfoData } from "@/types/backgroundInfo";
+
+type Mode = "view" | "edit" | "history";
 
 const BackgroundInfo = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false);
-  const [userType, setUserType] = useState<"student" | "professional" | "graduate" | "other" | "">("");
+  const {
+    currentInfo,
+    history,
+    isLoading,
+    updateInfo,
+    isUpdating,
+    deleteAll,
+    isDeleting,
+  } = useBackgroundInfo();
 
-  const [formData, setFormData] = useState({
-    jobTitle: "",
-    yearsExperience: "",
-    fieldOfStudy: "",
-    specialization: "",
-    currentStatus: "",
-    ageRange: "",
-    educationLevel: "",
-    locationPreference: "",
-    careerGoals: "",
-    previousCounseling: "",
-  });
+  const [mode, setMode] = useState<Mode>("view");
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setLoading(true);
-
+  const handleSave = async (data: BackgroundInfoData) => {
     try {
-      // Abandon any existing in-progress assessments first
+      await updateInfo(data);
+      toast({
+        title: "Background Info Updated",
+        description: "Your background information has been saved.",
+      });
+      setMode("view");
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    }
+  };
+
+  const handleSaveAndStart = async (data: BackgroundInfoData) => {
+    if (!user) return;
+    try {
+      await updateInfo(data);
+
+      // Abandon any existing in-progress assessments
       await supabase
         .from("assessments")
         .update({ status: "abandoned" })
         .eq("user_id", user.id)
         .eq("status", "in_progress");
 
-      // Create a fresh assessment with background info
-      const { data, error } = await supabase
+      // Create a fresh assessment with background info snapshot
+      const { data: assessment, error } = await supabase
         .from("assessments")
         .insert({
           user_id: user.id,
           status: "in_progress",
           current_layer: 1,
           started_at: new Date().toISOString(),
-          background_info: {
-            userType,
-            details: formData
-          }
+          background_info: { userType: data.userType, details: data.details },
         } as any)
         .select()
         .single();
@@ -65,223 +74,114 @@ const BackgroundInfo = () => {
       if (error) throw error;
 
       toast({
-        title: "Profile Updated",
-        description: "Your background information has been saved.",
+        title: "Assessment Started",
+        description: "Your background info has been saved and a new assessment started.",
       });
 
-      navigate(`/assessment?id=${data.id}`);
+      navigate(`/assessment?id=${assessment.id}`);
     } catch (error: any) {
       toast({
         variant: "destructive",
         title: "Error",
         description: error.message,
       });
-    } finally {
-      setLoading(false);
     }
   };
 
+  const handleStartAssessment = async () => {
+    if (!user || !currentInfo) return;
+    try {
+      // Abandon any existing in-progress assessments
+      await supabase
+        .from("assessments")
+        .update({ status: "abandoned" })
+        .eq("user_id", user.id)
+        .eq("status", "in_progress");
+
+      // Create assessment with current background info
+      const { data: assessment, error } = await supabase
+        .from("assessments")
+        .insert({
+          user_id: user.id,
+          status: "in_progress",
+          current_layer: 1,
+          started_at: new Date().toISOString(),
+          background_info: currentInfo.background_info,
+        } as any)
+        .select()
+        .single();
+
+      if (error) throw error;
+      navigate(`/assessment?id=${assessment.id}`);
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    try {
+      await deleteAll();
+      toast({
+        title: "Deleted",
+        description: "All background information has been removed.",
+      });
+      setMode("view");
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error",
+        description: error.message,
+      });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen grid place-items-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl shadow-xl border-primary/10">
-        <CardHeader className="text-center space-y-2">
-          <div className="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-            <User className="h-6 w-6 text-primary" />
-          </div>
-          <CardTitle className="text-3xl font-bold bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-transparent">
-            Tell us about yourself
-          </CardTitle>
-          <CardDescription className="text-lg">
-            This helps our AI tailor the career recommendations specifically to your context.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* User Type */}
-            <div className="space-y-2">
-              <Label htmlFor="userType" className="flex items-center gap-2">
-                <User className="h-4 w-4 text-primary" /> I am currently a...
-              </Label>
-              <Select onValueChange={(v: any) => setUserType(v)} value={userType}>
-                <SelectTrigger className="h-12 text-lg">
-                  <SelectValue placeholder="Select your status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="graduate">Recent Graduate</SelectItem>
-                  <SelectItem value="professional">Working Professional</SelectItem>
-                  <SelectItem value="other">Other / Career Break</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <div className="container py-8 max-w-3xl">
+        {mode === "view" && !currentInfo && (
+          <BackgroundInfoEmpty onAdd={() => setMode("edit")} />
+        )}
 
-            {/* Conditional fields based on user type */}
-            {userType === "professional" && (
-              <div className="grid gap-4 md:grid-cols-2 animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className="space-y-2">
-                  <Label htmlFor="jobTitle">Current Job Title</Label>
-                  <Combobox
-                    options={JOB_TITLES}
-                    value={formData.jobTitle}
-                    onValueChange={(v) => setFormData({...formData, jobTitle: v})}
-                    placeholder="Search or type your job title..."
-                    searchPlaceholder="Search job titles..."
-                    emptyMessage="No matching title found."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="yearsExp">Years of Experience</Label>
-                  <Input id="yearsExp" type="number" placeholder="e.g. 5" value={formData.yearsExperience} onChange={(e) => setFormData({...formData, yearsExperience: e.target.value})} />
-                </div>
-              </div>
-            )}
+        {mode === "view" && currentInfo && (
+          <BackgroundInfoView
+            record={currentInfo}
+            onEdit={() => setMode("edit")}
+            onHistory={() => setMode("history")}
+            onStartAssessment={handleStartAssessment}
+            onDeleteAll={handleDeleteAll}
+            isDeleting={isDeleting}
+          />
+        )}
 
-            {(userType === "student" || userType === "graduate") && (
-              <div className="grid gap-4 md:grid-cols-2 animate-in fade-in slide-in-from-top-4 duration-300">
-                <div className="space-y-2">
-                  <Label htmlFor="field">Degree / Field of Study</Label>
-                  <Combobox
-                    options={INDIAN_DEGREES}
-                    value={formData.fieldOfStudy}
-                    onValueChange={(v) => setFormData({...formData, fieldOfStudy: v})}
-                    placeholder="Search degrees (e.g. B.Tech, MBA)..."
-                    searchPlaceholder="Search degrees..."
-                    emptyMessage="No matching degree found."
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="spec">Specialization (Optional)</Label>
-                  <Combobox
-                    options={SPECIALIZATIONS}
-                    value={formData.specialization}
-                    onValueChange={(v) => setFormData({...formData, specialization: v})}
-                    placeholder="Search specializations..."
-                    searchPlaceholder="Search specializations..."
-                    emptyMessage="No matching specialization found."
-                  />
-                </div>
-              </div>
-            )}
+        {mode === "edit" && (
+          <BackgroundInfoForm
+            initialData={currentInfo?.background_info ?? null}
+            onSave={handleSave}
+            onSaveAndStart={handleSaveAndStart}
+            onCancel={currentInfo ? () => setMode("view") : undefined}
+            isSaving={isUpdating}
+          />
+        )}
 
-            {userType === "other" && (
-              <div className="space-y-2 animate-in fade-in slide-in-from-top-4 duration-300">
-                <Label htmlFor="status">Current Status</Label>
-                <Input id="status" placeholder="Describe your current situation" value={formData.currentStatus} onChange={(e) => setFormData({...formData, currentStatus: e.target.value})} />
-              </div>
-            )}
-
-            {/* Additional fields shown for all user types once selected */}
-            {userType && (
-              <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-300 border-t pt-6">
-                <p className="text-sm font-medium text-muted-foreground">Additional Information (helps personalize results)</p>
-                
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="ageRange" className="flex items-center gap-2">
-                      <User className="h-3 w-3" /> Age Range
-                    </Label>
-                    <Select onValueChange={(v) => setFormData({...formData, ageRange: v})} value={formData.ageRange}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select age range" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="16-18">16-18</SelectItem>
-                        <SelectItem value="19-22">19-22</SelectItem>
-                        <SelectItem value="23-28">23-28</SelectItem>
-                        <SelectItem value="29-35">29-35</SelectItem>
-                        <SelectItem value="36-45">36-45</SelectItem>
-                        <SelectItem value="46+">46+</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="educationLevel" className="flex items-center gap-2">
-                      <GraduationCap className="h-3 w-3" /> Education Level
-                    </Label>
-                    <Select onValueChange={(v) => setFormData({...formData, educationLevel: v})} value={formData.educationLevel}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select education level" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {EDUCATION_LEVELS.map((level) => (
-                          <SelectItem key={level.value} value={level.value}>{level.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="locationPref" className="flex items-center gap-2">
-                    <MapPin className="h-3 w-3" /> Location Preference
-                  </Label>
-                  <Select onValueChange={(v) => setFormData({...formData, locationPreference: v})} value={formData.locationPreference}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Where do you prefer to work?" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="remote">Remote / Work from Home</SelectItem>
-                      <SelectItem value="urban">Urban / City-based</SelectItem>
-                      <SelectItem value="suburban">Suburban</SelectItem>
-                      <SelectItem value="rural">Rural</SelectItem>
-                      <SelectItem value="flexible">Flexible / No Preference</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="careerGoals" className="flex items-center gap-2">
-                    <Target className="h-3 w-3" /> Career Goals (Optional)
-                  </Label>
-                  <Textarea
-                    id="careerGoals"
-                    placeholder="Briefly describe your career goals or what you hope to achieve..."
-                    value={formData.careerGoals}
-                    onChange={(e) => setFormData({...formData, careerGoals: e.target.value})}
-                    className="min-h-[80px] resize-none"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="previousCounseling">Have you had career counseling before?</Label>
-                  <Select onValueChange={(v) => setFormData({...formData, previousCounseling: v})} value={formData.previousCounseling}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select an option" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No, this is my first time</SelectItem>
-                      <SelectItem value="informal">Yes, informal guidance</SelectItem>
-                      <SelectItem value="formal">Yes, professional counseling</SelectItem>
-                      <SelectItem value="online">Yes, through online tools/tests</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            )}
-
-            <Button
-              type="submit"
-              className="w-full h-12 text-lg font-semibold bg-gradient-to-r from-primary to-purple-600 hover:from-primary/90 hover:to-purple-700 transition-all"
-              disabled={
-                !userType ||
-                loading ||
-                (userType === 'professional' && (!formData.jobTitle || !formData.yearsExperience)) ||
-                ((userType === 'student' || userType === 'graduate') && !formData.fieldOfStudy) ||
-                (userType === 'other' && !formData.currentStatus)
-              }
-            >
-              {loading ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  Start Assessment <ArrowRight className="ml-2 h-5 w-5" />
-                </>
-              )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+        {mode === "history" && (
+          <BackgroundInfoHistory
+            history={history}
+            onBack={() => setMode("view")}
+          />
+        )}
+      </div>
     </div>
   );
 };
