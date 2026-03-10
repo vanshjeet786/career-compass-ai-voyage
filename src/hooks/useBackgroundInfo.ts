@@ -34,7 +34,7 @@ export function useBackgroundInfo() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data ?? []) as BackgroundInfoRecord[];
+      return (data ?? []) as unknown as BackgroundInfoRecord[];
     },
     enabled: !!user,
   });
