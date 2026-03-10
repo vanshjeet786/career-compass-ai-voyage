@@ -133,16 +133,19 @@ export type Database = {
           background_info: Json
           created_at: string
           id: string
+          user_id: string
         }
         Insert: {
           background_info: Json
           created_at?: string
           id?: string
+          user_id: string
         }
         Update: {
           background_info?: Json
           created_at?: string
           id?: string
+          user_id?: string
         }
         Relationships: []
       }
