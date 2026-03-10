@@ -87,27 +87,6 @@ export type Database = {
           },
         ]
       }
-      background_info_history: {
-        Row: {
-          id: string
-          user_id: string
-          background_info: Json
-          created_at: string | null
-        }
-        Insert: {
-          id?: string
-          user_id: string
-          background_info: Json
-          created_at?: string | null
-        }
-        Update: {
-          id?: string
-          user_id?: string
-          background_info?: Json
-          created_at?: string | null
-        }
-        Relationships: []
-      }
       assessments: {
         Row: {
           background_info: Json | null
@@ -148,6 +127,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      background_info_history: {
+        Row: {
+          background_info: Json
+          created_at: string
+          id: string
+        }
+        Insert: {
+          background_info: Json
+          created_at?: string
+          id?: string
+        }
+        Update: {
+          background_info?: Json
+          created_at?: string
+          id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {

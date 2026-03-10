@@ -51,7 +51,7 @@ export function useBackgroundInfo() {
         .single();
 
       if (error) throw error;
-      return data as BackgroundInfoRecord;
+      return data as unknown as BackgroundInfoRecord;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["background-info"] });
