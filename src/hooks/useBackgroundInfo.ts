@@ -19,7 +19,7 @@ export function useBackgroundInfo() {
         .maybeSingle();
 
       if (error) throw error;
-      return data as BackgroundInfoRecord | null;
+      return data as unknown as BackgroundInfoRecord | null;
     },
     enabled: !!user,
   });
@@ -34,7 +34,7 @@ export function useBackgroundInfo() {
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      return (data ?? []) as BackgroundInfoRecord[];
+      return (data ?? []) as unknown as BackgroundInfoRecord[];
     },
     enabled: !!user,
   });
@@ -51,7 +51,7 @@ export function useBackgroundInfo() {
         .single();
 
       if (error) throw error;
-      return data as BackgroundInfoRecord;
+      return data as unknown as BackgroundInfoRecord;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["background-info"] });
