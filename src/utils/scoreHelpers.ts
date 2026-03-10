@@ -1,4 +1,5 @@
 import type { UserProfile, CareerRecommendation } from "./userProfile";
+import { getDisplayName } from "./categoryLabels";
 
 // ─── Unified Score Colors ───────────────────────────────────────────────────
 
@@ -92,23 +93,26 @@ export function getLayerNarrative(layerName: string, subScores: { name: string; 
   const second = sorted[1];
   const avg = subScores.reduce((s, i) => s + i.score, 0) / subScores.length;
 
+  const topLabel = getDisplayName(top.name);
+  const secondLabel = second ? getDisplayName(second.name) : "";
+
   if (layerName.includes("Intelligence")) {
-    return `Your intelligence profile is strongest in ${top.name} (${top.score.toFixed(1)}/5)${second ? ` and ${second.name} (${second.score.toFixed(1)}/5)` : ""}. With an average of ${avg.toFixed(1)}/5, ${avg >= 3.5 ? "you have a well-defined cognitive profile with clear direction" : "there's meaningful room to develop across multiple dimensions"}.`;
+    return `Your intelligence profile is strongest in ${topLabel} (${top.score.toFixed(1)}/5)${second ? ` and ${secondLabel} (${second.score.toFixed(1)}/5)` : ""}. With an average of ${avg.toFixed(1)}/5, ${avg >= 3.5 ? "you have a well-defined cognitive profile with clear direction" : "there's meaningful room to develop across multiple dimensions"}.`;
   }
   if (layerName.includes("Personality")) {
-    return `Your personality profile highlights ${top.name} (${top.score.toFixed(1)}/5) as your most defining trait${second ? `, followed by ${second.name}` : ""}. ${avg >= 3.5 ? "This combination suggests strong self-awareness and clear work style preferences." : "Understanding these traits will help you find environments where you naturally thrive."}`;
+    return `Your personality profile highlights ${topLabel} (${top.score.toFixed(1)}/5) as your most defining trait${second ? `, followed by ${secondLabel}` : ""}. ${avg >= 3.5 ? "This combination suggests strong self-awareness and clear work style preferences." : "Understanding these traits will help you find environments where you naturally thrive."}`;
   }
   if (layerName.includes("Aptitude")) {
-    return `${top.name} (${top.score.toFixed(1)}/5) stands out as your strongest practical skill${second ? `, closely followed by ${second.name}` : ""}. ${avg >= 3.5 ? "Your skill profile is well-rounded and career-ready." : "Targeted skill development can rapidly strengthen your professional toolkit."}`;
+    return `${topLabel} (${top.score.toFixed(1)}/5) stands out as your strongest practical skill${second ? `, closely followed by ${secondLabel}` : ""}. ${avg >= 3.5 ? "Your skill profile is well-rounded and career-ready." : "Targeted skill development can rapidly strengthen your professional toolkit."}`;
   }
   if (layerName.includes("Background")) {
-    return `Your background context shows ${top.name} (${top.score.toFixed(1)}/5) as your strongest foundation. ${avg >= 3.5 ? "You have solid resources to support your career development." : "Identifying accessible pathways and resources will be key to your next steps."}`;
+    return `Your background context shows ${topLabel} (${top.score.toFixed(1)}/5) as your strongest foundation. ${avg >= 3.5 ? "You have solid resources to support your career development." : "Identifying accessible pathways and resources will be key to your next steps."}`;
   }
   if (layerName.includes("Interest")) {
-    return `${top.name} (${top.score.toFixed(1)}/5) is where your motivation burns brightest. ${avg >= 3.5 ? "Strong interests and clear values give you a powerful compass for career decisions." : "Exploring diverse experiences can help sharpen what truly energizes you."}`;
+    return `${topLabel} (${top.score.toFixed(1)}/5) is where your motivation burns brightest. ${avg >= 3.5 ? "Strong interests and clear values give you a powerful compass for career decisions." : "Exploring diverse experiences can help sharpen what truly energizes you."}`;
   }
 
-  return `Your strongest dimension is ${top.name} at ${top.score.toFixed(1)}/5, with an overall average of ${avg.toFixed(1)}/5.`;
+  return `Your strongest dimension is ${topLabel} at ${top.score.toFixed(1)}/5, with an overall average of ${avg.toFixed(1)}/5.`;
 }
 
 // ─── Executive Summary ──────────────────────────────────────────────────────
@@ -118,9 +122,9 @@ export function generateExecutiveSummary(
   careers: CareerRecommendation[]
 ): string {
   const { topStrengths, developmentAreas, totalScore } = profile.overallScores;
-  const top2 = topStrengths.slice(0, 2).map((s) => s.category);
+  const top2 = topStrengths.slice(0, 2).map((s) => getDisplayName(s.category));
   const topCareer = careers[0];
-  const growthNames = developmentAreas.slice(0, 2).map((s) => s.category);
+  const growthNames = developmentAreas.slice(0, 2).map((s) => getDisplayName(s.category));
 
   const openLine = totalScore >= 4
     ? "Your assessment reveals a highly defined profile with exceptional clarity."
@@ -150,7 +154,7 @@ function getCategoryDomain(category: string): string {
 
 export function getStrengthsNarrative(strengths: { name: string; score: number }[]): string {
   if (strengths.length === 0) return "";
-  const names = strengths.slice(0, 3).map((s) => s.name);
+  const names = strengths.slice(0, 3).map((s) => getDisplayName(s.name));
   if (names.length === 1) {
     return `Your standout strength in ${names[0]} is the anchor of your professional identity.`;
   }
@@ -159,7 +163,7 @@ export function getStrengthsNarrative(strengths: { name: string; score: number }
 
 export function getGrowthNarrative(areas: { name: string; score: number }[]): string {
   if (areas.length === 0) return "";
-  const names = areas.map((s) => s.name);
+  const names = areas.map((s) => getDisplayName(s.name));
   return `Your developing areas in ${names.join(" and ")} aren't roadblocks — they're invitations to grow. Many successful professionals have similar profiles and thrive by leaning into their strengths while gradually building complementary skills.`;
 }
 
@@ -186,4 +190,110 @@ export function getCareerRelevanceForCategory(categoryName: string): string[] {
     }
   }
   return careers;
+}
+
+// ─── Cross-Layer Insights ───────────────────────────────────────────────────
+
+export interface CrossLayerInsight {
+  icon: "brain" | "heart" | "target" | "zap" | "compass" | "lightbulb";
+  title: string;
+  narrative: string;
+}
+
+export function generateCrossLayerInsights(profile: UserProfile): CrossLayerInsight[] {
+  const insights: CrossLayerInsight[] = [];
+
+  const get = (key: string): number => {
+    return (
+      profile.intelligenceScores[key] ??
+      profile.personalityTraits[key] ??
+      profile.aptitudes[key] ??
+      profile.backgroundFactors[key] ??
+      profile.interests[key] ??
+      0
+    );
+  };
+
+  // Analytical + Introverted → deep research roles
+  if (get("Logical-Mathematical Intelligence") >= 3.8 && get("Big Five - Extraversion") <= 2.8) {
+    insights.push({
+      icon: "brain",
+      title: "Focused Analytical Thinker",
+      narrative:
+        "Your strong analytical abilities combined with a reflective, inward-oriented personality suggest you thrive in focused, independent research or technical roles. You likely do your best work when given space to think deeply without constant interruption.",
+    });
+  }
+
+  // Creative + Autonomous → freelance/startup
+  if (get("Creative/Design Skills") >= 3.5 && get("SDT - Autonomy") >= 3.8) {
+    insights.push({
+      icon: "zap",
+      title: "Independent Creative Spirit",
+      narrative:
+        "Your creative abilities paired with a strong drive for independence make you well-suited for freelance work, startups, or any environment where you can shape your own projects. You're energized by the freedom to explore unconventional ideas.",
+    });
+  }
+
+  // Conscientious + Technical → quality-critical engineering
+  if (get("Big Five - Conscientiousness") >= 3.8 && get("Technical Skills") >= 3.5) {
+    insights.push({
+      icon: "target",
+      title: "Precision-Driven Professional",
+      narrative:
+        "Your disciplined, detail-oriented nature combined with technical proficiency positions you exceptionally well for quality-critical roles — think engineering, finance, or data work where accuracy matters. Others trust your work because you get it right.",
+    });
+  }
+
+  // Interpersonal + Extraversion → people-facing leadership
+  if (get("Interpersonal Intelligence") >= 3.5 && get("Big Five - Extraversion") >= 3.5) {
+    insights.push({
+      icon: "heart",
+      title: "Natural People Leader",
+      narrative:
+        "Your ability to read others combined with genuine social energy makes you a natural leader. You're at your best in team environments — managing, mentoring, or inspiring others. Roles in leadership, sales, or client relations would leverage this strength beautifully.",
+    });
+  }
+
+  // High Openness + Low Conscientiousness → needs innovation + structure support
+  if (get("Big Five - Openness") >= 3.8 && get("Big Five - Conscientiousness") <= 2.8) {
+    insights.push({
+      icon: "lightbulb",
+      title: "Visionary Innovator",
+      narrative:
+        "Your high curiosity and creativity generate big ideas, though you may find structured follow-through less natural. You'll thrive in innovation-focused roles with supportive project management or a co-founder who handles execution while you drive vision.",
+    });
+  }
+
+  // Strong Verbal + Interpersonal → communication-driven leadership
+  if (get("Verbal Aptitude") >= 3.5 && get("Interpersonal Intelligence") >= 3.5) {
+    insights.push({
+      icon: "compass",
+      title: "Persuasive Communicator",
+      narrative:
+        "Your verbal fluency combined with strong interpersonal awareness makes you exceptionally effective at influence and persuasion. Careers in law, consulting, public relations, or executive communication would let you use both strengths simultaneously.",
+    });
+  }
+
+  // Passion + Low Career Exposure → needs exploration
+  if (get("Interests and Passions") >= 3.8 && get("Career Exposure") <= 2.5) {
+    insights.push({
+      icon: "compass",
+      title: "Passionate Explorer",
+      narrative:
+        "You have strong motivation and clear passions, but haven't yet had broad exposure to different career paths. Informational interviews, job shadowing, and industry events could reveal career options that perfectly match your enthusiasm.",
+    });
+  }
+
+  // Mastery + Abstract Reasoning → specialist potential
+  if (get("SDT - Competence") >= 3.8 && get("Abstract Reasoning") >= 3.5) {
+    insights.push({
+      icon: "brain",
+      title: "Deep Specialist Potential",
+      narrative:
+        "Your drive to master complex skills combined with strong abstract reasoning suggests you could become an expert in a demanding field. Whether it's AI, advanced engineering, or strategic consulting — you have the cognitive tools and motivation to go deep.",
+    });
+  }
+
+  // Return top 6 at most
+  return insights.slice(0, 6);
 }

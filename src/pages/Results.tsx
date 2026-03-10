@@ -35,6 +35,8 @@ import OverviewTab from "@/components/results/OverviewTab";
 import ScoreBreakdown from "@/components/results/ScoreBreakdown";
 import CareerPathsPanel from "@/components/results/CareerPathsPanel";
 import AIChatPanel from "@/components/results/AIChatPanel";
+import AIEnhancedSection from "@/components/results/AIEnhancedSection";
+import { getDisplayName } from "@/utils/categoryLabels";
 
 type ResponseRow = {
   question_id: string;
@@ -347,7 +349,7 @@ const Results = () => {
   const comparisonData = useMemo(() => {
     if (!aiResults?.visualizationData?.labels) return undefined;
     return aiResults.visualizationData.labels.map((label, i) => ({
-      name: label,
+      name: getDisplayName(label),
       base: aiResults.visualizationData.baseScores[i] || 0,
       enhanced: aiResults.visualizationData.enhancedScores[i] || 0,
     }));
@@ -419,7 +421,7 @@ const Results = () => {
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-background to-muted/30 pb-16">
-      <section className="container max-w-7xl py-10 space-y-6" id="results-report">
+      <section className="container max-w-7xl py-10 space-y-8" id="results-report">
         {/* ─── Hero Header ─────────────────────────────────────────── */}
         <Card className="overflow-hidden border-primary/20 animate-fade-in">
           <div className="bg-gradient-to-r from-primary/15 via-secondary/10 to-accent/15 p-8 md:p-10">
@@ -524,6 +526,16 @@ const Results = () => {
             />
           </TabsContent>
         </Tabs>
+
+        {/* ─── AI Enhanced Analysis ────────────────────────────────── */}
+        <AIEnhancedSection
+          aiResults={aiResults}
+          aiLoading={aiLoading}
+          comparisonData={comparisonData}
+          careers={careerRecommendations}
+          scoredCategories={scoredCategories}
+          userProfile={userProfile}
+        />
 
         {/* ─── Bottom Actions ──────────────────────────────────────── */}
         <Card>

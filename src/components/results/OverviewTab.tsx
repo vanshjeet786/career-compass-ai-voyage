@@ -14,6 +14,7 @@ import {
 import { Brain, TrendingUp, Lightbulb, Target, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { getScoreColor, getStrengthsNarrative, getGrowthNarrative } from "@/utils/scoreHelpers";
+import { getDisplayName } from "@/utils/categoryLabels";
 import ScoreGauge from "./ScoreGauge";
 import type { UserProfile, CareerRecommendation } from "@/utils/userProfile";
 
@@ -60,9 +61,9 @@ const OverviewTab = ({
   return (
     <div className="space-y-6">
       {/* ─── Insight Cards ──────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-6 lg:grid-cols-3">
         {/* Card 1: What Sets You Apart */}
-        <Card className="lg:col-span-2 animate-fade-up">
+        <Card className="lg:col-span-2 animate-fade-up shadow-sm hover:shadow-md transition-shadow">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <TrendingUp className="h-5 w-5 text-green-500" />
@@ -82,7 +83,7 @@ const OverviewTab = ({
                       style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
                     >
                       <div className="flex items-center justify-between text-sm">
-                        <span className="font-medium truncate mr-2">{item.name}</span>
+                        <span className="font-medium truncate mr-2">{getDisplayName(item.name)}</span>
                         <Badge variant="outline" className={`${colors.text} text-xs`}>
                           {item.score}/5
                         </Badge>
@@ -108,7 +109,7 @@ const OverviewTab = ({
         </Card>
 
         {/* Card 2: Growth Opportunities */}
-        <Card className="animate-fade-up" style={{ animationDelay: "150ms", animationFillMode: "both" }}>
+        <Card className="animate-fade-up shadow-sm hover:shadow-md transition-shadow" style={{ animationDelay: "150ms", animationFillMode: "both" }}>
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Lightbulb className="h-5 w-5 text-amber-500" />
@@ -128,7 +129,7 @@ const OverviewTab = ({
                   style={{ animationDelay: `${(i + 5) * 100}ms` }}
                 >
                   <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium truncate mr-2">{item.name}</span>
+                    <span className="font-medium truncate mr-2">{getDisplayName(item.name)}</span>
                     <Badge variant="outline" className={`${colors.text} text-xs`}>
                       {item.score}/5
                     </Badge>
@@ -175,7 +176,7 @@ const OverviewTab = ({
       )}
 
       {/* ─── Radar Chart ───────────────────────────────────────── */}
-      <Card className="animate-fade-up" style={{ animationDelay: "300ms", animationFillMode: "both" }}>
+      <Card className="animate-fade-up shadow-sm hover:shadow-md transition-shadow" style={{ animationDelay: "300ms", animationFillMode: "both" }}>
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center gap-2">
@@ -231,10 +232,13 @@ const OverviewTab = ({
             </ResponsiveContainer>
           ) : radarSlice.length ? (
             <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarSlice.map(d => ({
-                ...d,
-                name: d.name.length > 20 ? d.name.slice(0, 18) + "…" : d.name,
-              }))}>
+              <RadarChart data={radarSlice.map(d => {
+                const label = getDisplayName(d.name);
+                return {
+                  ...d,
+                  name: label.length > 22 ? label.slice(0, 20) + "…" : label,
+                };
+              })}>
                 <PolarGrid stroke="hsl(var(--border))" />
                 <PolarAngleAxis
                   dataKey="name"

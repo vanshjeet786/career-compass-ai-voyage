@@ -35,6 +35,7 @@ import {
   getLayerNarrative,
   getCareerRelevanceForCategory,
 } from "@/utils/scoreHelpers";
+import { getDisplayName } from "@/utils/categoryLabels";
 
 interface SubScore {
   name: string;
@@ -77,7 +78,7 @@ const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
         </p>
       </div>
 
-      <Accordion type="multiple" defaultValue={["layer-1"]} className="space-y-3">
+      <Accordion type="multiple" defaultValue={["layer-1"]} className="space-y-4">
         {layers.map((layer) => {
           const avgScore =
             layer.subScores.length > 0
@@ -118,19 +119,22 @@ const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
 
                 {/* Bar chart */}
                 {layer.subScores.length > 0 && (
-                  <div style={{ height: chartHeight }} className="mb-6">
+                  <div style={{ height: chartHeight }} className="mb-8">
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart
-                        data={layer.subScores}
+                        data={layer.subScores.map((s) => ({
+                          ...s,
+                          displayName: getDisplayName(s.name),
+                        }))}
                         layout="vertical"
                         margin={{ left: 10, right: 20, top: 5, bottom: 5 }}
                       >
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis type="number" domain={[0, 5]} tick={{ fontSize: 11 }} />
                         <YAxis
-                          dataKey="name"
+                          dataKey="displayName"
                           type="category"
-                          width={160}
+                          width={170}
                           tick={{ fontSize: 10, fill: "hsl(var(--muted-foreground))" }}
                         />
                         <Tooltip
@@ -184,7 +188,7 @@ const ScoreBreakdown = ({ layers }: ScoreBreakdownProps) => {
                           className="w-full p-3 flex items-center justify-between text-left"
                         >
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-sm">{sub.name}</span>
+                            <span className="font-medium text-sm">{getDisplayName(sub.name)}</span>
                             <Badge
                               variant={sub.score >= 4 ? "default" : sub.score >= 3 ? "secondary" : "destructive"}
                               className="text-xs"
