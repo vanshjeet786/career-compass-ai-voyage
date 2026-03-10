@@ -36,6 +36,7 @@ import ScoreBreakdown from "@/components/results/ScoreBreakdown";
 import CareerPathsPanel from "@/components/results/CareerPathsPanel";
 import AIChatPanel from "@/components/results/AIChatPanel";
 import AIEnhancedSection from "@/components/results/AIEnhancedSection";
+import AnalyticsTab from "@/components/results/AnalyticsTab";
 import { getDisplayName } from "@/utils/categoryLabels";
 
 type ResponseRow = {
@@ -489,7 +490,18 @@ const Results = () => {
             <TabsTrigger value="chat" className="gap-1.5">
               <MessageSquare className="h-4 w-4" /> Talk to AI
             </TabsTrigger>
+            <TabsTrigger value="analytics" className="gap-1.5">
+              <BarChart3 className="h-4 w-4" /> Analytics
+            </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="analytics">
+            <AnalyticsTab
+              userProfile={userProfile}
+              careers={careerRecommendations}
+              aiResults={aiResults}
+            />
+          </TabsContent>
 
           <TabsContent value="overview">
             <OverviewTab
