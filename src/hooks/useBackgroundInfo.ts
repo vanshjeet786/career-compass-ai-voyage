@@ -19,7 +19,7 @@ export function useBackgroundInfo() {
         .maybeSingle();
 
       if (error) throw error;
-      return data as BackgroundInfoRecord | null;
+      return data as unknown as BackgroundInfoRecord | null;
     },
     enabled: !!user,
   });
